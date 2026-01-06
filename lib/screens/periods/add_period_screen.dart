@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart'; // <--- Import do Provider
 import '../../core/theme/app_colors.dart';
+import '../../providers/academic_provider.dart'; // <--- Import da nossa lógica
 
 class AddPeriodScreen extends StatefulWidget {
   const AddPeriodScreen({super.key});
@@ -9,19 +11,18 @@ class AddPeriodScreen extends StatefulWidget {
 }
 
 class _AddPeriodScreenState extends State<AddPeriodScreen> {
+  // Controlador para pegar o texto do input
+  final _nameController = TextEditingController();
+  
   bool _isCurrentPeriod = false;
   DateTime? _startDate;
   DateTime? _endDate;
 
-  // Função auxiliar para formatar data (Ex: 12 Fev 2024)
   String _formatDate(DateTime date) {
-    // Para simplificar, vamos formatar na mão.
-    // Em produção usariamos o pacote 'intl'.
     List<String> months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
     return "${date.day} ${months[date.month - 1]} ${date.year}";
   }
 
-  // Função para abrir o calendário
   Future<void> _selectDate(bool isStart) async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -29,7 +30,6 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
       firstDate: DateTime(2020),
       lastDate: DateTime(2030),
       builder: (context, child) {
-        // Customiza as cores do calendário para ficar Dark
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.dark(
@@ -54,6 +54,34 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
     }
   }
 
+  // --- FUNÇÃO PARA SALVAR ---
+  void _savePeriod() {
+    // 1. Validação básica
+    if (_nameController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Por favor, digite um nome para o período.')),
+      );
+      return;
+    }
+    if (_startDate == null || _endDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selecione as datas de início e fim.')),
+      );
+      return;
+    }
+
+    // 2. Chama o Provider para salvar no Hive
+    context.read<AcademicProvider>().addPeriod(
+      _nameController.text,
+      _startDate!,
+      _endDate!,
+      _isCurrentPeriod,
+    );
+
+    // 3. Fecha a tela e volta para a lista
+    Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -70,7 +98,7 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
         centerTitle: true,
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context), // Salvar (Mock)
+            onPressed: _savePeriod, // <--- Chama nossa função de salvar
             child: const Text("Salvar", style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
           )
         ],
@@ -84,7 +112,26 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildLabel("Nome do Período"),
-                  _buildInput(hint: "Ex: 2024.1, Semestre 1", icon: Icons.edit),
+                  
+                  // Input atualizado com Controller
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: TextField(
+                      controller: _nameController, // <--- Ligamos o controller aqui
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: "Ex: 2024.1, Semestre 1",
+                        hintStyle: TextStyle(color: Colors.grey[600]),
+                        suffixIcon: Icon(Icons.edit, color: Colors.grey[600], size: 20),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                      ),
+                    ),
+                  ),
+
                   const Padding(
                     padding: EdgeInsets.only(top: 8, left: 4),
                     child: Text("Utilize um nome curto para fácil identificação.", 
@@ -151,14 +198,13 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
             ),
           ),
           
-          // Botão Inferior Fixo
           Padding(
             padding: const EdgeInsets.all(20),
             child: SizedBox(
               width: double.infinity,
               height: 56,
               child: ElevatedButton.icon(
-                onPressed: () => Navigator.pop(context),
+                onPressed: _savePeriod, // <--- Chama nossa função de salvar
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.black,
@@ -175,31 +221,11 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
     );
   }
 
-  // --- Widgets Auxiliares ---
-
+  // --- Widgets Auxiliares (Iguais ao anterior) ---
   Widget _buildLabel(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Text(text, style: const TextStyle(color: AppColors.textSecondary, fontSize: 14, fontWeight: FontWeight.bold)),
-    );
-  }
-
-  Widget _buildInput({required String hint, required IconData icon}) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: TextField(
-        style: const TextStyle(color: Colors.white),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: TextStyle(color: Colors.grey[600]),
-          suffixIcon: Icon(icon, color: Colors.grey[600], size: 20),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-        ),
-      ),
     );
   }
 

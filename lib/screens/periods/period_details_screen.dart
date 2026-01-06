@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart'; // <--- Importante para ouvir o banco
 import '../../core/theme/app_colors.dart';
+import '../../models/period_model.dart';
+import '../../models/subject_model.dart'; // <--- Import do modelo de matérias
 import '../subject/add_subject_screen.dart';
 import '../subject/subject_details_screen.dart';
 
 class PeriodDetailsScreen extends StatelessWidget {
-  const PeriodDetailsScreen({super.key});
+  final PeriodModel period;
+
+  const PeriodDetailsScreen({
+    super.key,
+    required this.period,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -17,7 +25,10 @@ class PeriodDetailsScreen extends StatelessWidget {
         title: const Text(
           "Detalhes do Período",
           style: TextStyle(
-              color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
@@ -32,118 +43,99 @@ class PeriodDetailsScreen extends StatelessWidget {
       ),
       body: Stack(
         children: [
-          // CONTEÚDO COM SCROLL
-          SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 10, 20, 100), // Espaço extra para o botão
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 1. TÍTULO E SUBTÍTULO
-                const Text(
-                  "5º Semestre",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  "Engenharia de Software • 2023.2",
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-                ),
+          // USANDO ValueListenableBuilder PARA OUVIR MUDANÇAS NO BANCO
+          ValueListenableBuilder(
+            valueListenable: Hive.box<SubjectModel>('subjects').listenable(),
+            builder: (context, Box<SubjectModel> box, _) {
+              
+              // 1. Filtrar apenas as matérias deste período
+              final subjects = box.values
+                  .where((subject) => subject.periodId == period.id)
+                  .toList();
 
-                const SizedBox(height: 24),
-
-                // 2. NOVO CARD DE STATUS (Unificado)
-                _buildStatusCard(),
-
-                const SizedBox(height: 32),
-
-                // 3. CABEÇALHO DA LISTA
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              return SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 100),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      "Disciplinas",
-                      style: TextStyle(
+                    // Título e Subtítulo
+                    Text(
+                      period.name,
+                      style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 18,
+                        fontSize: 28,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Text(
-                        "6 Matérias",
-                        style: TextStyle(
-                          color: AppColors.primary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      "Engenharia de Software • 2023.2",
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
                     ),
+
+                    const SizedBox(height: 24),
+
+                    // Card de Status (Pode ser dinamizado depois com cálculos)
+                    _buildStatusCard(subjects), 
+
+                    const SizedBox(height: 32),
+
+                    // Cabeçalho da Lista
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          "Disciplinas",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            "${subjects.length} Matérias", // <--- Contador dinâmico
+                            style: const TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // 2. LISTA DINÂMICA
+                    if (subjects.isEmpty)
+                      _buildEmptyState()
+                    else
+                      Column(
+                        children: subjects.map((subject) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _buildSubjectItem(
+                              context,
+                              subject: subject, // Passamos o objeto inteiro agora
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      
+                    const SizedBox(height: 20),
                   ],
                 ),
-
-                const SizedBox(height: 16),
-
-                // 4. LISTA DE MATÉRIAS (Com indicador de faltas)
-                // OBS: Agora passamos 'context' como primeiro argumento
-                _buildSubjectItem(
-                  context, 
-                  title: "Estrutura de Dados",
-                  professor: "Prof. Silva",
-                  faults: 0, // Verde
-                  color: Colors.green,
-                  icon: Icons.code,
-                ),
-                const SizedBox(height: 12),
-                _buildSubjectItem(
-                  context,
-                  title: "Cálculo II",
-                  professor: "Prof. Santos",
-                  faults: 2, // Amarelo
-                  color: Colors.green,
-                  icon: Icons.functions,
-                ),
-                const SizedBox(height: 12),
-                _buildSubjectItem(
-                  context,
-                  title: "Banco de Dados",
-                  professor: "Prof. Oliveira",
-                  faults: 3, // Vermelho
-                  color: Colors.teal,
-                  icon: Icons.storage,
-                ),
-                const SizedBox(height: 12),
-                _buildSubjectItem(
-                  context,
-                  title: "Programação Web",
-                  professor: "Prof. Costa",
-                  faults: 1, // Amarelo
-                  color: Colors.blue,
-                  icon: Icons.web,
-                ),
-                const SizedBox(height: 12),
-                _buildSubjectItem(
-                  context,
-                  title: "Empreendedorismo",
-                  professor: "Prof. Mendes",
-                  faults: 4, // Vermelho
-                  color: Colors.green.shade800,
-                  icon: Icons.lightbulb,
-                ),
-                const SizedBox(height: 20),
-              ],
-            ),
+              );
+            },
           ),
 
-          // 5. BOTÃO FLUTUANTE EMBAIXO
+          // Botão Flutuante
           Positioned(
             bottom: 20,
             left: 20,
@@ -155,7 +147,11 @@ class PeriodDetailsScreen extends StatelessWidget {
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const AddSubjectScreen()),
+                    MaterialPageRoute(
+                      builder: (context) => AddSubjectScreen(
+                        periodId: period.id,
+                      ),
+                    ),
                   );
                 },
                 style: ElevatedButton.styleFrom(
@@ -180,8 +176,45 @@ class PeriodDetailsScreen extends StatelessWidget {
     );
   }
 
-  // --- WIDGET DO CARD DE STATUS GRANDE ---
-  Widget _buildStatusCard() {
+  // --- Widget de Lista Vazia ---
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        children: [
+          const SizedBox(height: 40),
+          Icon(Icons.library_books_outlined, size: 60, color: Colors.white.withOpacity(0.2)),
+          const SizedBox(height: 16),
+          Text(
+            "Nenhuma disciplina ainda",
+            style: TextStyle(color: Colors.white.withOpacity(0.5)),
+          ),
+        ],
+      ),
+    );
+  }
+
+// --- CARD DE STATUS INTELIGENTE ---
+  Widget _buildStatusCard(List<SubjectModel> subjects) {
+    // 1. CÁLCULO DAS FALTAS CRÍTICAS
+    // Conta quantas matérias estouraram o limite de faltas
+    int criticalFaults = subjects.where((s) => s.faults >= s.maxFaults).length;
+
+    // 2. CÁLCULO DA MÉDIA GERAL DO SEMESTRE
+    double totalAverage = 0;
+    int subjectsWithGrades = 0;
+
+    for (var subject in subjects) {
+      if (subject.grades.isNotEmpty) {
+        // Calcula a média dessa matéria
+        double subjectAvg = subject.grades.map((g) => g.value).reduce((a, b) => a + b) / subject.grades.length;
+        totalAverage += subjectAvg;
+        subjectsWithGrades++;
+      }
+    }
+
+    // Se tiver pelo menos uma matéria com nota, faz a média geral. Senão, é 0.
+    double semesterAverage = subjectsWithGrades > 0 ? totalAverage / subjectsWithGrades : 0.0;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -194,10 +227,10 @@ class PeriodDetailsScreen extends StatelessWidget {
         children: [
           Row(
             children: const [
-              Icon(Icons.notes, color: AppColors.primary, size: 20),
+              Icon(Icons.analytics_outlined, color: AppColors.primary, size: 20), // Ícone mudado para Analytics
               SizedBox(width: 8),
               Text(
-                "Status do Período",
+                "Resumo do Semestre",
                 style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               ),
             ],
@@ -207,34 +240,36 @@ class PeriodDetailsScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              // Lado Esquerdo: Média
+              // Lado Esquerdo: Média Geral
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
+                children: [
                   Text(
-                    "8.5",
-                    style: TextStyle(
+                    semesterAverage == 0 ? "--" : semesterAverage.toStringAsFixed(1), // Mostra "--" se for 0
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 36,
                       fontWeight: FontWeight.bold,
                       height: 1.0,
                     ),
                   ),
-                  SizedBox(height: 4),
-                  Text(
-                    "Média Atual",
+                  const SizedBox(height: 4),
+                  const Text(
+                    "Média Geral",
                     style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                   ),
                 ],
               ),
-              // Lado Direito: Faltas Críticas
+              
+              // Lado Direito: Matérias em Risco
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  const Text(
-                    "2",
+                  Text(
+                    "$criticalFaults",
                     style: TextStyle(
-                      color: Color(0xFFFF5252), // Vermelho alerta
+                      // Se tiver 0 críticas fica verde, senão fica vermelho
+                      color: criticalFaults > 0 ? const Color(0xFFFF5252) : AppColors.primary, 
                       fontSize: 36,
                       fontWeight: FontWeight.bold,
                       height: 1.0,
@@ -244,7 +279,7 @@ class PeriodDetailsScreen extends StatelessWidget {
                   Row(
                     children: const [
                       Text(
-                        "Faltas Críticas",
+                        "Matérias Críticas", // Mudamos o texto para ficar mais claro
                         style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                       ),
                     ],
@@ -258,31 +293,26 @@ class PeriodDetailsScreen extends StatelessWidget {
     );
   }
 
-  // --- WIDGET DA LINHA DA MATÉRIA (ATUALIZADO COM NAVEGAÇÃO) ---
-  Widget _buildSubjectItem(
-    BuildContext context, { // Adicionado Context aqui
-    required String title,
-    required String professor,
-    required int faults,
-    required Color color,
-    required IconData icon,
-  }) {
-    // Lógica simples para cor do status
+  // --- Widget do Item da Matéria (Atualizado) ---
+  Widget _buildSubjectItem(BuildContext context, {required SubjectModel subject}) {
+    // Lógica de cor baseada em porcentagem de faltas
     Color statusColor;
-    if (faults == 0) {
-      statusColor = AppColors.primary; // Verde (Sem faltas)
-    } else if (faults <= 2) {
-      statusColor = Colors.amber; // Amarelo (Atenção)
+    if (subject.faults == 0) {
+      statusColor = AppColors.primary;
+    } else if (subject.faults >= subject.maxFaults) {
+      statusColor = const Color(0xFFFF5252); // Crítico
     } else {
-      statusColor = const Color(0xFFFF5252); // Vermelho (Crítico)
+      statusColor = Colors.amber; // Atenção
     }
 
-    // Envolvido em GestureDetector para permitir o clique
+    // Convertendo o int da cor de volta para Color
+    final subjectColor = Color(subject.colorValue);
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const SubjectDetailsScreen()),
+          MaterialPageRoute(builder: (context) => SubjectDetailsScreen(subject: subject)),
         );
       },
       child: Container(
@@ -293,25 +323,25 @@ class PeriodDetailsScreen extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Ícone Quadrado
+            // Ícone com a cor escolhida
             Container(
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: color.withOpacity(0.2),
+                color: subjectColor.withOpacity(0.2),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(icon, color: color, size: 24),
+              // Como o modelo não tem ícone, usamos a primeira letra ou um ícone padrão
+              child: Icon(Icons.book, color: subjectColor, size: 24),
             ),
             const SizedBox(width: 16),
             
-            // Títulos
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    title,
+                    subject.name,
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -320,7 +350,7 @@ class PeriodDetailsScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    professor,
+                    subject.professor,
                     style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                   ),
                 ],
@@ -347,7 +377,7 @@ class PeriodDetailsScreen extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    "$faults ${faults == 1 ? 'falta' : 'faltas'}",
+                    "${subject.faults}/${subject.maxFaults}",
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,

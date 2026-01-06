@@ -1,18 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import '../../core/theme/app_colors.dart';
+import '../../models/subject_model.dart';
 
 class AddSubjectScreen extends StatefulWidget {
-  const AddSubjectScreen({super.key});
+  final String periodId;
+  final SubjectModel? subjectToEdit; // <--- Novo: Aceita uma matéria para editar
+
+  const AddSubjectScreen({
+    super.key,
+    required this.periodId,
+    this.subjectToEdit, // Se for nulo = Criação. Se tiver dados = Edição.
+  });
 
   @override
   State<AddSubjectScreen> createState() => _AddSubjectScreenState();
 }
 
 class _AddSubjectScreenState extends State<AddSubjectScreen> {
-  int _limitFaltas = 15; // Valor inicial do print
+  final _nameController = TextEditingController();
+  final _professorController = TextEditingController();
+  
+  int _limitFaltas = 15;
   Color _selectedColor = const Color(0xFF00E676); // Verde neon padrão
 
-  // Lista de cores disponíveis para a etiqueta
   final List<Color> _colors = [
     const Color(0xFF00E676), // Verde
     const Color(0xFF2979FF), // Azul
@@ -23,7 +34,77 @@ class _AddSubjectScreenState extends State<AddSubjectScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    // SE FOR MODO EDIÇÃO, PREENCHE OS CAMPOS
+    if (widget.subjectToEdit != null) {
+      _nameController.text = widget.subjectToEdit!.name;
+      _professorController.text = widget.subjectToEdit!.professor;
+      _limitFaltas = widget.subjectToEdit!.maxFaults;
+      _selectedColor = Color(widget.subjectToEdit!.colorValue);
+    }
+  }
+
+  // --- FUNÇÃO PARA SALVAR (CRIAR OU ATUALIZAR) ---
+  Future<void> _saveSubject() async {
+    // 1. Validação básica
+    if (_nameController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor, digite o nome da matéria.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // 2. Abrir a caixa do Hive
+    var box = await Hive.openBox<SubjectModel>('subjects');
+
+    if (widget.subjectToEdit != null) {
+      // --- CASO 1: EDITAR ---
+      // Criamos um novo objeto com os dados novos, mas MANTENDO o ID e dados históricos (notas/faltas)
+      final updatedSubject = SubjectModel(
+        id: widget.subjectToEdit!.id, // IMPORTANTE: Mesmo ID
+        periodId: widget.periodId,
+        name: _nameController.text,
+        professor: _professorController.text.isNotEmpty ? _professorController.text : "Não informado",
+        faults: widget.subjectToEdit!.faults, // Mantém faltas atuais
+        maxFaults: _limitFaltas,
+        colorValue: _selectedColor.value,
+        note: widget.subjectToEdit!.note, // Mantém a anotação antiga
+        grades: widget.subjectToEdit!.grades, // Mantém as notas antigas
+      );
+
+      await box.put(updatedSubject.id, updatedSubject);
+    } else {
+      // --- CASO 2: CRIAR NOVO ---
+      final String uniqueId = DateTime.now().millisecondsSinceEpoch.toString();
+      
+      final newSubject = SubjectModel(
+        id: uniqueId,
+        periodId: widget.periodId,
+        name: _nameController.text,
+        professor: _professorController.text.isNotEmpty ? _professorController.text : "Não informado",
+        faults: 0,
+        maxFaults: _limitFaltas,
+        colorValue: _selectedColor.value,
+      );
+
+      await box.put(uniqueId, newSubject);
+    }
+
+    // 6. Fechar a tela
+    if (mounted) {
+      Navigator.pop(context, true); // Retorna true para atualizar a tela anterior
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // Verifica se é edição para mudar o título
+    final isEditing = widget.subjectToEdit != null;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -33,17 +114,14 @@ class _AddSubjectScreenState extends State<AddSubjectScreen> {
           icon: const Icon(Icons.close, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          "Adicionar Disciplina",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        title: Text(
+          isEditing ? "Editar Disciplina" : "Adicionar Disciplina", // Título Dinâmico
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
         actions: [
           TextButton(
-            onPressed: () {
-              // Lógica de salvar virá depois
-              Navigator.pop(context); 
-            },
+            onPressed: _saveSubject,
             child: const Text(
               "Salvar",
               style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
@@ -59,15 +137,13 @@ class _AddSubjectScreenState extends State<AddSubjectScreen> {
             const Text("INFORMAÇÕES BÁSICAS", style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             
-            // Input Nome da Matéria
             _buildLabel("Nome da Matéria"),
-            _buildInput(hint: "Ex: Cálculo I", icon: Icons.menu_book),
+            _buildInput(controller: _nameController, hint: "Ex: Cálculo I", icon: Icons.menu_book),
             
             const SizedBox(height: 16),
             
-            // Input Nome do Professor
             _buildLabel("Nome do Professor"),
-            _buildInput(hint: "Ex: Dr. Silva", icon: Icons.person),
+            _buildInput(controller: _professorController, hint: "Ex: Dr. Silva", icon: Icons.person),
             
             const SizedBox(height: 32),
             const Divider(color: Colors.white10),
@@ -76,7 +152,6 @@ class _AddSubjectScreenState extends State<AddSubjectScreen> {
             const Text("DETALHES ACADÊMICOS", style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
 
-            // Contador de Faltas
             _buildLabel("Limite de Faltas"),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -108,7 +183,6 @@ class _AddSubjectScreenState extends State<AddSubjectScreen> {
             const Text("PERSONALIZAÇÃO", style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
 
-            // Seletor de Cores
             _buildLabel("Cor da Etiqueta"),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -135,17 +209,14 @@ class _AddSubjectScreenState extends State<AddSubjectScreen> {
 
             const SizedBox(height: 40),
 
-            // Botão Salvar Principal
             SizedBox(
               width: double.infinity,
               height: 56,
               child: ElevatedButton.icon(
-                onPressed: () {
-                   Navigator.pop(context);
-                },
+                onPressed: _saveSubject,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.black, // Texto preto no botão verde
+                  foregroundColor: Colors.black, 
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   elevation: 5,
                   shadowColor: AppColors.primary.withOpacity(0.5),
@@ -168,7 +239,6 @@ class _AddSubjectScreenState extends State<AddSubjectScreen> {
   }
 
   // --- Widgets Auxiliares ---
-
   Widget _buildLabel(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -176,13 +246,14 @@ class _AddSubjectScreenState extends State<AddSubjectScreen> {
     );
   }
 
-  Widget _buildInput({required String hint, required IconData icon}) {
+  Widget _buildInput({required TextEditingController controller, required String hint, required IconData icon}) {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(12),
       ),
       child: TextField(
+        controller: controller,
         style: const TextStyle(color: Colors.white),
         decoration: InputDecoration(
           hintText: hint,
