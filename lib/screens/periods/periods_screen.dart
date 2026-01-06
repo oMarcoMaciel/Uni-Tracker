@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart'; // <--- Importante
+import 'package:hive_flutter/hive_flutter.dart'; // <--- Trocamos Provider por Hive
 import '../../core/theme/app_colors.dart';
-import '../../providers/academic_provider.dart';
 import '../../models/period_model.dart';
 import 'add_period_screen.dart';
 import 'period_details_screen.dart';
@@ -17,97 +16,104 @@ class PeriodsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // O Consumer escuta qualquer mudança no banco de dados e redesenha a tela
-    return Consumer<AcademicProvider>(
-      builder: (context, provider, child) {
-        final periods = provider.periods;
-
-        // Tenta encontrar o período marcado como atual
-        PeriodModel? currentPeriod;
-        try {
-          currentPeriod = periods.firstWhere((p) => p.isCurrent);
-        } catch (e) {
-          currentPeriod = null;
-        }
-
-        // Pega o resto para o histórico (ordenado do mais novo para o mais velho)
-        final historyPeriods = periods.where((p) => !p.isCurrent).toList();
-        // Opcional: ordenar por data (se quiser)
-        // historyPeriods.sort((a, b) => b.startDate.compareTo(a.startDate));
-
-        return Scaffold(
-          backgroundColor: AppColors.background,
-          appBar: AppBar(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            title: const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("Meus Períodos", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 24)),
-                Text("Gerencie seu histórico acadêmico", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-              ],
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Meus Períodos", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 24)),
+            Text("Gerencie seu histórico acadêmico", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+          ],
+        ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: TextButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const AddPeriodScreen()),
+                );
+              },
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.white.withOpacity(0.05),
+                foregroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text("Adicionar"),
             ),
-            actions: [
-              Padding(
-                padding: const EdgeInsets.only(right: 16),
-                child: TextButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const AddPeriodScreen()),
-                    );
-                  },
-                  style: TextButton.styleFrom(
-                    backgroundColor: Colors.white.withOpacity(0.05),
-                    foregroundColor: AppColors.primary,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text("Adicionar"),
-                ),
-              )
-            ],
-          ),
-          body: periods.isEmpty 
-              ? _buildEmptyState() // Mostra algo se não tiver nada cadastrado
-              : ListView(
-                  padding: const EdgeInsets.all(20),
-                  children: [
-                    // SEÇÃO PERÍODO ATUAL
-                    if (currentPeriod != null) ...[
-                      Row(
-                        children: const [
-                          Icon(Icons.circle, color: AppColors.primary, size: 10),
-                          SizedBox(width: 8),
-                          Text("PERÍODO ATUAL", style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, letterSpacing: 1)),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      _buildCurrentPeriodCard(context, currentPeriod),
-                      const SizedBox(height: 32),
-                    ],
+          )
+        ],
+      ),
+      // O ValueListenableBuilder escuta mudanças na caixa 'periodsBox'
+      body: ValueListenableBuilder(
+        valueListenable: Hive.box<PeriodModel>('periodsBox').listenable(),
+        builder: (context, Box<PeriodModel> box, _) {
+          
+          // 1. Converte os dados do banco para uma lista
+          final periods = box.values.toList();
 
-                    // SEÇÃO HISTÓRICO
-                    if (historyPeriods.isNotEmpty) ...[
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: const [
-                          Text("Histórico", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-                          Text("Filtrar", style: TextStyle(color: AppColors.textSecondary)),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      
-                      // Lista dinâmica do histórico
-                      ...historyPeriods.map((period) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _buildHistoryCard(context, period), // <--- PASSE O CONTEXT AQUI
-                      )),
-                    ],
+          // 2. Ordena por data (opcional, mas recomendado)
+          periods.sort((a, b) => b.startDate.compareTo(a.startDate));
+
+          // 3. Separa o período atual dos históricos
+          PeriodModel? currentPeriod;
+          try {
+            currentPeriod = periods.firstWhere((p) => p.isCurrent);
+          } catch (e) {
+            currentPeriod = null;
+          }
+
+          final historyPeriods = periods.where((p) => !p.isCurrent).toList();
+
+          // 4. Se a lista estiver vazia, mostra estado vazio
+          if (periods.isEmpty) {
+            return _buildEmptyState();
+          }
+
+          // 5. Constrói a lista
+          return ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              // SEÇÃO PERÍODO ATUAL
+              if (currentPeriod != null) ...[
+                Row(
+                  children: const [
+                    Icon(Icons.circle, color: AppColors.primary, size: 10),
+                    SizedBox(width: 8),
+                    Text("PERÍODO ATUAL", style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, letterSpacing: 1)),
                   ],
                 ),
-        );
-      },
+                const SizedBox(height: 12),
+                _buildCurrentPeriodCard(context, currentPeriod),
+                const SizedBox(height: 32),
+              ],
+
+              // SEÇÃO HISTÓRICO
+              if (historyPeriods.isNotEmpty) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: const [
+                    Text("Histórico", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                    Text("Filtrar", style: TextStyle(color: AppColors.textSecondary)),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                
+                // Lista dinâmica do histórico
+                ...historyPeriods.map((period) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _buildHistoryCard(context, period),
+                )),
+              ],
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -139,7 +145,7 @@ class PeriodsScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                period.name, // Nome real do banco
+                period.name, 
                 style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
               ),
               Container(
@@ -154,12 +160,12 @@ class PeriodsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            _formatDateRange(period.startDate, period.endDate), // Datas reais
+            _formatDateRange(period.startDate, period.endDate),
             style: const TextStyle(color: AppColors.textSecondary),
           ),
           const SizedBox(height: 20),
           
-          // Barra de Progresso (Fixa por enquanto, depois calcularemos com as datas)
+          // Barra de Progresso (Visual)
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: LinearProgressIndicator(
@@ -239,7 +245,7 @@ class PeriodsScreen extends StatelessWidget {
                 children: [
                   const Text("Média", style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
                   Text(
-                    "--", // Placeholder até termos notas
+                    "--", // Placeholder até conectarmos as notas
                     style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 16),
                   ),
                 ],

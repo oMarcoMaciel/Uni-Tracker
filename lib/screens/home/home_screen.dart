@@ -1,18 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart'; // <--- Import do Hive
 import '../../core/theme/app_colors.dart';
+import '../../models/user_model.dart'; // <--- Import do User Model
 import '../periods/periods_screen.dart'; 
 import '../settings/settings_screen.dart';
 import '../profile/profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final int initialIndex;
+
+  const HomeScreen({super.key, this.initialIndex = 0});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _selectedIndex = 0;
+  late int _selectedIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedIndex = widget.initialIndex;
+  }
 
   void _onItemTapped(int index) {
     setState(() {
@@ -20,19 +30,29 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  // Função auxiliar para pegar as iniciais (Igual à tela de Perfil)
+  String _getInitials(String name) {
+    if (name.isEmpty) return "?";
+    List<String> names = name.trim().split(" ");
+    String initials = names[0][0];
+    if (names.length > 1) {
+      initials += names[names.length - 1][0];
+    }
+    return initials.toUpperCase();
+  }
+
   @override
   Widget build(BuildContext context) {
     // Lista de telas que o rodapé controla
     final List<Widget> screens = [
-      _buildDashboard(),     // Índice 0: Início
-      const PeriodsScreen(), // Índice 1: Cursos 
-      const ProfileScreen(), // Índice 2: Perfil 
+      _buildDashboard(),     // Índice 0
+      const PeriodsScreen(), // Índice 1
+      const ProfileScreen(), // Índice 2
     ];
 
     return Scaffold(
       backgroundColor: AppColors.background,
       
-      // Exibe a tela correspondente ao índice selecionado
       body: screens[_selectedIndex],
 
       bottomNavigationBar: Container(
@@ -57,7 +77,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- O CÓDIGO DO DASHBOARD FICOU AQUI EMBAIXO ---
   Widget _buildDashboard() {
     return SafeArea(
       child: SingleChildScrollView(
@@ -65,7 +84,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildHeader(),
+            _buildHeader(), // <--- Agora chama o Header dinâmico
             const SizedBox(height: 24),
             _buildSummaryCards(),
             const SizedBox(height: 32),
@@ -75,7 +94,7 @@ class _HomeScreenState extends State<HomeScreen> {
               icon: Icons.calendar_month, 
               title: "Períodos", 
               subtitle: "Histórico de notas", 
-              onTap: () => _onItemTapped(1) // Atalho para ir para a aba Cursos
+              onTap: () => _onItemTapped(1) 
             ),
             const SizedBox(height: 12),
             _buildQuickAccessItem(
@@ -83,7 +102,6 @@ class _HomeScreenState extends State<HomeScreen> {
               title: "Ajustes", 
               subtitle: "Preferências", 
               onTap: () {
-                // TEM QUE TER ESSE CÓDIGO AQUI:
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const SettingsScreen()),
@@ -96,44 +114,64 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Widgets auxiliares (Header, Cards, etc) continuam aqui...
-  // (Para economizar espaço na resposta, mantenha os métodos _buildHeader, 
-  // _buildSummaryCards e _buildQuickAccessItem que já estavam no arquivo anterior.
-  // Se você apagou, me avise que mando eles de novo!)
-  
-  // --- COLE AQUI OS WIDGETS AUXILIARES ANTIGOS (_buildHeader, etc) ---
-  
+   // --- HEADER ATUALIZADO ---
    Widget _buildHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Row(
+    // Usa ValueListenableBuilder para atualizar se o usuário editar o perfil
+    return ValueListenableBuilder(
+      valueListenable: Hive.box<UserModel>('userBox').listenable(),
+      builder: (context, Box<UserModel> box, _) {
+        final user = box.get('currentUser');
+        final userName = user?.name ?? "Visitante"; // Valor padrão se der erro
+
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const CircleAvatar(
-              radius: 24,
-              backgroundImage: NetworkImage('https://i.pravatar.cc/150?img=12'),
-              backgroundColor: AppColors.surface,
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text("Bem-vindo de volta,", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                Text("Gabriel Silva", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+            Row(
+              children: [
+                // AVATAR COM INICIAIS
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: const BoxDecoration(
+                    color: AppColors.surface,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Text(
+                      _getInitials(userName),
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("Bem-vindo de volta,", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                    Text(
+                      userName, // Nome Dinâmico
+                      style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)
+                    ),
+                  ],
+                ),
               ],
             ),
-          ],
-        ),
-        Stack(
-          children: [
-            IconButton(onPressed: () {}, icon: const Icon(Icons.notifications_outlined, color: Colors.white)),
-            Positioned(
-              right: 12, top: 12,
-              child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle)),
+            Stack(
+              children: [
+                IconButton(onPressed: () {}, icon: const Icon(Icons.notifications_outlined, color: Colors.white)),
+                Positioned(
+                  right: 12, top: 12,
+                  child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle)),
+                )
+              ],
             )
           ],
-        )
-      ],
+        );
+      }
     );
   }
 
