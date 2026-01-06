@@ -5,14 +5,24 @@ import '../settings/settings_screen.dart';
 import '../profile/profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final int initialIndex; // <--- 1. Nova variável
+
+  // 2. Atualize o construtor para receber (padrão é 0/Início)
+  const HomeScreen({super.key, this.initialIndex = 0});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _selectedIndex = 0;
+  late int _selectedIndex; // <--- 3. Mudou de 'int = 0' para 'late int'
+
+  @override
+  void initState() {
+    super.initState();
+    // 4. Inicializa com o valor que veio do main.dart
+    _selectedIndex = widget.initialIndex;
+  }
 
   void _onItemTapped(int index) {
     setState(() {
@@ -24,9 +34,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     // Lista de telas que o rodapé controla
     final List<Widget> screens = [
-      _buildDashboard(),     // Índice 0: Início
-      const PeriodsScreen(), // Índice 1: Cursos 
-      const ProfileScreen(), // Índice 2: Perfil 
+      _buildDashboard(),     // Índice 0
+      const PeriodsScreen(), // Índice 1
+      const ProfileScreen(), // Índice 2
     ];
 
     return Scaffold(
@@ -57,7 +67,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- O CÓDIGO DO DASHBOARD FICOU AQUI EMBAIXO ---
+  // --- O RESTO DO SEU CÓDIGO (DASHBOARD E WIDGETS) CONTINUA IGUAL ABAIXO ---
+  // Vou manter o seu código aqui para você poder copiar o arquivo inteiro se quiser
+  
   Widget _buildDashboard() {
     return SafeArea(
       child: SingleChildScrollView(
@@ -75,7 +87,7 @@ class _HomeScreenState extends State<HomeScreen> {
               icon: Icons.calendar_month, 
               title: "Períodos", 
               subtitle: "Histórico de notas", 
-              onTap: () => _onItemTapped(1) // Atalho para ir para a aba Cursos
+              onTap: () => _onItemTapped(1) 
             ),
             const SizedBox(height: 12),
             _buildQuickAccessItem(
@@ -83,7 +95,6 @@ class _HomeScreenState extends State<HomeScreen> {
               title: "Ajustes", 
               subtitle: "Preferências", 
               onTap: () {
-                // TEM QUE TER ESSE CÓDIGO AQUI:
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const SettingsScreen()),
@@ -96,13 +107,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Widgets auxiliares (Header, Cards, etc) continuam aqui...
-  // (Para economizar espaço na resposta, mantenha os métodos _buildHeader, 
-  // _buildSummaryCards e _buildQuickAccessItem que já estavam no arquivo anterior.
-  // Se você apagou, me avise que mando eles de novo!)
-  
-  // --- COLE AQUI OS WIDGETS AUXILIARES ANTIGOS (_buildHeader, etc) ---
-  
    Widget _buildHeader() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,

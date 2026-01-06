@@ -5,14 +5,88 @@ import '../../models/period_model.dart';
 import '../../models/subject_model.dart'; // <--- Import do modelo de matérias
 import '../subject/add_subject_screen.dart';
 import '../subject/subject_details_screen.dart';
+import 'add_period_screen.dart'; // Import para edição de período
 
-class PeriodDetailsScreen extends StatelessWidget {
+class PeriodDetailsScreen extends StatefulWidget {
   final PeriodModel period;
 
   const PeriodDetailsScreen({
     super.key,
     required this.period,
   });
+
+  @override
+  State<PeriodDetailsScreen> createState() => _PeriodDetailsScreenState();
+}
+
+class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
+  // Variável local para manter o período atualizado caso seja editado
+  late PeriodModel _period;
+
+  @override
+  void initState() {
+    super.initState();
+    _period = widget.period;
+  }
+
+  // --- Lógica para excluir o período ---
+  Future<void> _deletePeriod() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text("Excluir Período?", style: TextStyle(color: Colors.white)),
+        content: const Text(
+          "Isso apagará o período e todas as suas disciplinas e notas.\nEssa ação não pode ser desfeita.",
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancelar", style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Excluir Tudo", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      // 1. Deletar Disciplinas associadas
+      var subjectsBox = Hive.box<SubjectModel>('subjects');
+      final subjectsToDelete = subjectsBox.values.where((s) => s.periodId == _period.id).toList();
+      for (var subject in subjectsToDelete) {
+        await subjectsBox.delete(subject.id);
+      }
+
+      // 2. Deletar o Período
+      var periodsBox = Hive.box<PeriodModel>('periodsBox');
+      await periodsBox.delete(_period.id);
+
+      if (mounted) Navigator.pop(context); // Volta para a lista
+    }
+  }
+
+  // --- Lógica para editar o período ---
+  Future<void> _editPeriod() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddPeriodScreen(periodToEdit: _period),
+      ),
+    );
+
+    // Recarrega os dados do banco após voltar da edição
+    var box = Hive.box<PeriodModel>('periodsBox');
+    var updated = box.get(_period.id);
+    if (updated != null) {
+      setState(() {
+        _period = updated;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,20 +111,24 @@ class PeriodDetailsScreen extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.edit, color: Colors.white, size: 20),
-            onPressed: () {},
+            onPressed: _editPeriod,
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+            onPressed: _deletePeriod,
           ),
         ],
       ),
       body: Stack(
         children: [
-          // USANDO ValueListenableBuilder PARA OUVIR MUDANÇAS NO BANCO
+          // USANDO ValueListenableBuilder PARA OUVIR MUDANÇAS NO BANCO DE MATÉRIAS
           ValueListenableBuilder(
             valueListenable: Hive.box<SubjectModel>('subjects').listenable(),
             builder: (context, Box<SubjectModel> box, _) {
               
               // 1. Filtrar apenas as matérias deste período
               final subjects = box.values
-                  .where((subject) => subject.periodId == period.id)
+                  .where((subject) => subject.periodId == _period.id)
                   .toList();
 
               return SingleChildScrollView(
@@ -60,7 +138,7 @@ class PeriodDetailsScreen extends StatelessWidget {
                   children: [
                     // Título e Subtítulo
                     Text(
-                      period.name,
+                      _period.name, // Usa a variável local _period
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 28,
@@ -68,14 +146,14 @@ class PeriodDetailsScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
-                      "Engenharia de Software • 2023.2",
-                      style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                    Text(
+                      "Ano Letivo ${_period.startDate.year}",
+                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
                     ),
 
                     const SizedBox(height: 24),
 
-                    // Card de Status (Pode ser dinamizado depois com cálculos)
+                    // Card de Status
                     _buildStatusCard(subjects), 
 
                     const SizedBox(height: 32),
@@ -149,7 +227,7 @@ class PeriodDetailsScreen extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                       builder: (context) => AddSubjectScreen(
-                        periodId: period.id,
+                        periodId: _period.id,
                       ),
                     ),
                   );
@@ -196,7 +274,6 @@ class PeriodDetailsScreen extends StatelessWidget {
 // --- CARD DE STATUS INTELIGENTE ---
   Widget _buildStatusCard(List<SubjectModel> subjects) {
     // 1. CÁLCULO DAS FALTAS CRÍTICAS
-    // Conta quantas matérias estouraram o limite de faltas
     int criticalFaults = subjects.where((s) => s.faults >= s.maxFaults).length;
 
     // 2. CÁLCULO DA MÉDIA GERAL DO SEMESTRE
@@ -227,7 +304,7 @@ class PeriodDetailsScreen extends StatelessWidget {
         children: [
           Row(
             children: const [
-              Icon(Icons.analytics_outlined, color: AppColors.primary, size: 20), // Ícone mudado para Analytics
+              Icon(Icons.analytics_outlined, color: AppColors.primary, size: 20),
               SizedBox(width: 8),
               Text(
                 "Resumo do Semestre",
@@ -245,7 +322,7 @@ class PeriodDetailsScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    semesterAverage == 0 ? "--" : semesterAverage.toStringAsFixed(1), // Mostra "--" se for 0
+                    semesterAverage == 0 ? "--" : semesterAverage.toStringAsFixed(1),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 36,
@@ -268,7 +345,6 @@ class PeriodDetailsScreen extends StatelessWidget {
                   Text(
                     "$criticalFaults",
                     style: TextStyle(
-                      // Se tiver 0 críticas fica verde, senão fica vermelho
                       color: criticalFaults > 0 ? const Color(0xFFFF5252) : AppColors.primary, 
                       fontSize: 36,
                       fontWeight: FontWeight.bold,
@@ -279,7 +355,7 @@ class PeriodDetailsScreen extends StatelessWidget {
                   Row(
                     children: const [
                       Text(
-                        "Matérias Críticas", // Mudamos o texto para ficar mais claro
+                        "Matérias Críticas",
                         style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                       ),
                     ],
@@ -293,9 +369,8 @@ class PeriodDetailsScreen extends StatelessWidget {
     );
   }
 
-  // --- Widget do Item da Matéria (Atualizado) ---
+  // --- Widget do Item da Matéria ---
   Widget _buildSubjectItem(BuildContext context, {required SubjectModel subject}) {
-    // Lógica de cor baseada em porcentagem de faltas
     Color statusColor;
     if (subject.faults == 0) {
       statusColor = AppColors.primary;
@@ -305,7 +380,6 @@ class PeriodDetailsScreen extends StatelessWidget {
       statusColor = Colors.amber; // Atenção
     }
 
-    // Convertendo o int da cor de volta para Color
     final subjectColor = Color(subject.colorValue);
 
     return GestureDetector(
@@ -323,7 +397,6 @@ class PeriodDetailsScreen extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Ícone com a cor escolhida
             Container(
               width: 48,
               height: 48,
@@ -331,11 +404,9 @@ class PeriodDetailsScreen extends StatelessWidget {
                 color: subjectColor.withOpacity(0.2),
                 borderRadius: BorderRadius.circular(12),
               ),
-              // Como o modelo não tem ícone, usamos a primeira letra ou um ícone padrão
               child: Icon(Icons.book, color: subjectColor, size: 24),
             ),
             const SizedBox(width: 16),
-            
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -356,8 +427,6 @@ class PeriodDetailsScreen extends StatelessWidget {
                 ],
               ),
             ),
-            
-            // Badge de Faltas
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(

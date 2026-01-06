@@ -25,7 +25,6 @@ class _SubjectDetailsScreenState extends State<SubjectDetailsScreen> {
   @override
   void initState() {
     super.initState();
-    // Inicializa com os dados recebidos, mas permite alteração depois
     _subject = widget.subject; 
     _faltas = _subject.faults;
     _noteController = TextEditingController(text: _subject.note ?? "");
@@ -44,7 +43,7 @@ class _SubjectDetailsScreenState extends State<SubjectDetailsScreen> {
     setState(() => _faltas = newValue);
     
     var box = Hive.box<SubjectModel>('subjects');
-    _subject.faults = newValue; // Atualiza a variável local
+    _subject.faults = newValue; 
     await box.put(_subject.id, _subject);
   }
 
@@ -53,8 +52,10 @@ class _SubjectDetailsScreenState extends State<SubjectDetailsScreen> {
     setState(() => _isSavingNote = true);
     
     var box = Hive.box<SubjectModel>('subjects');
-    _subject.note = _noteController.text; // Atualiza a variável local
+    _subject.note = _noteController.text; 
     await box.put(_subject.id, _subject);
+    
+    await Future.delayed(const Duration(milliseconds: 500));
     
     if (mounted) {
       setState(() => _isSavingNote = false);
@@ -85,9 +86,8 @@ class _SubjectDetailsScreenState extends State<SubjectDetailsScreen> {
     }
   }
 
-  // --- LÓGICA 4: EDITAR DISCIPLINA (CORRIGIDA) ---
+  // --- LÓGICA 4: EDITAR DISCIPLINA ---
   Future<void> _editSubject() async {
-    // 1. Vai para a tela de edição
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -98,15 +98,12 @@ class _SubjectDetailsScreenState extends State<SubjectDetailsScreen> {
       ),
     );
 
-    // 2. Quando voltar, recarrega os dados do banco!
     var box = Hive.box<SubjectModel>('subjects');
-    var updatedSubject = box.get(_subject.id); // Pega a versão nova do banco
+    var updatedSubject = box.get(_subject.id); 
 
     if (updatedSubject != null) {
       setState(() {
-        _subject = updatedSubject; // Atualiza a variável principal
-        
-        // Sincroniza os controladores visuais também
+        _subject = updatedSubject; 
         _faltas = updatedSubject.faults;
         _noteController.text = updatedSubject.note ?? "";
       });
@@ -153,7 +150,7 @@ class _SubjectDetailsScreenState extends State<SubjectDetailsScreen> {
                     value: value,
                   );
                   var box = Hive.box<SubjectModel>('subjects');
-                  _subject.grades.add(newGrade); // Usa _subject
+                  _subject.grades.add(newGrade); 
                   await box.put(_subject.id, _subject);
                   setState(() {});
                   if(mounted) Navigator.pop(context);
@@ -179,7 +176,6 @@ class _SubjectDetailsScreenState extends State<SubjectDetailsScreen> {
   Widget build(BuildContext context) {
     double average = _calculateAverage();
 
-    // OBS: Troquei todas as chamadas 'widget.subject' por '_subject' daqui para baixo
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -210,9 +206,9 @@ class _SubjectDetailsScreenState extends State<SubjectDetailsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. CABEÇALHO
+            // 1. CABEÇALHO LIMPO (Sem horário)
             Text(
-              _subject.name, // Usa _subject
+              _subject.name, 
               style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
@@ -220,11 +216,8 @@ class _SubjectDetailsScreenState extends State<SubjectDetailsScreen> {
               children: [
                 const Icon(Icons.person, color: AppColors.textSecondary, size: 16),
                 const SizedBox(width: 4),
+                // Exibe apenas o Professor agora
                 Text(_subject.professor, style: const TextStyle(color: AppColors.textSecondary)),
-                const SizedBox(width: 16),
-                const Icon(Icons.access_time, color: AppColors.textSecondary, size: 16),
-                const SizedBox(width: 4),
-                const Text("--:--", style: TextStyle(color: AppColors.textSecondary)),
               ],
             ),
 
@@ -360,7 +353,7 @@ class _SubjectDetailsScreenState extends State<SubjectDetailsScreen> {
 
   // --- WIDGET DO CARD DE PRESENÇA ---
   Widget _buildAttendanceCard() {
-    double progress = _faltas / _subject.maxFaults; // Usa _subject
+    double progress = _faltas / _subject.maxFaults; 
     if (progress > 1.0) progress = 1.0;
     
     bool isCritical = _faltas >= _subject.maxFaults;

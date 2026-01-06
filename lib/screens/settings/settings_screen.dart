@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart'; // <--- Import do Hive
 import '../../core/theme/app_colors.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -10,6 +11,81 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _isDarkMode = true;
+  String _startupOption = 'home'; // Padrão inicial
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  // --- 1. CARREGAR CONFIGURAÇÃO ---
+  void _loadSettings() {
+    var box = Hive.box('settings');
+    setState(() {
+      _startupOption = box.get('startup_screen', defaultValue: 'home');
+    });
+  }
+
+  // --- 2. SALVAR CONFIGURAÇÃO ---
+  void _updateStartupOption(String value) {
+    var box = Hive.box('settings');
+    box.put('startup_screen', value);
+    setState(() {
+      _startupOption = value;
+    });
+    Navigator.pop(context); // Fecha o modal
+  }
+
+  // --- 3. MODAL DE SELEÇÃO ---
+  void _showStartupOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Escolha a tela inicial",
+                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 20),
+              _buildOptionTile("Menu Inicial (Dashboard)", "home"),
+              const Divider(color: Colors.white10),
+              _buildOptionTile("Lista de Períodos", "periods"),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildOptionTile(String title, String value) {
+    final isSelected = _startupOption == value;
+    return ListTile(
+      onTap: () => _updateStartupOption(value),
+      title: Text(title, style: const TextStyle(color: Colors.white)),
+      trailing: isSelected 
+        ? const Icon(Icons.check_circle, color: AppColors.primary)
+        : const Icon(Icons.circle_outlined, color: Colors.grey),
+    );
+  }
+
+  // Helper para mostrar o texto bonito no botão
+  String _getStartupLabel() {
+    switch (_startupOption) {
+      case 'periods': return "Lista de Períodos";
+      case 'home':
+      default: return "Dashboard";
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,12 +119,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _buildSettingItem(
                     icon: Icons.home_filled,
                     title: "Tela Inicial Padrão",
+                    onTap: _showStartupOptions, // <--- Agora abre o modal
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Text("2026.1", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                        SizedBox(width: 8),
-                        Icon(Icons.chevron_right, color: AppColors.textSecondary, size: 20),
+                      children: [
+                        // Texto dinâmico baseado na escolha
+                        Text(_getStartupLabel(), style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.chevron_right, color: AppColors.textSecondary, size: 20),
                       ],
                     ),
                   ),
@@ -136,32 +214,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildSettingItem({required IconData icon, required String title, required Widget trailing}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), // Altura ajustada
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: title == "Ajuda" ? Colors.pink.withOpacity(0.2) : // Exemplo de cor diferente p/ ajuda
-                     title == "Editar Perfil" ? Colors.purple.withOpacity(0.2) :
-                     Colors.blueGrey.withOpacity(0.2), 
-              borderRadius: BorderRadius.circular(8),
+  // Atualizei este widget para aceitar o onTap
+  Widget _buildSettingItem({
+    required IconData icon, 
+    required String title, 
+    required Widget trailing,
+    VoidCallback? onTap, // <--- Novo parâmetro opcional
+  }) {
+    return InkWell( // <--- Adicionei InkWell para o clique funcionar
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: title == "Ajuda" ? Colors.pink.withOpacity(0.2) :
+                       title == "Editar Perfil" ? Colors.purple.withOpacity(0.2) :
+                       Colors.blueGrey.withOpacity(0.2), 
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, 
+                color: title == "Ajuda" ? Colors.pinkAccent : 
+                       title == "Editar Perfil" ? Colors.purpleAccent :
+                       Colors.blue[200], 
+                size: 20
+              ),
             ),
-            child: Icon(icon, 
-              color: title == "Ajuda" ? Colors.pinkAccent : 
-                     title == "Editar Perfil" ? Colors.purpleAccent :
-                     Colors.blue[200], 
-              size: 20
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
             ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
-          ),
-          trailing,
-        ],
+            trailing,
+          ],
+        ),
       ),
     );
   }

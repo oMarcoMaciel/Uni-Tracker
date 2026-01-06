@@ -1,22 +1,32 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart'; // <--- Import do Provider
+import 'package:hive_flutter/hive_flutter.dart';
 import '../../core/theme/app_colors.dart';
-import '../../providers/academic_provider.dart'; // <--- Import da nossa lógica
+import '../../models/period_model.dart';
 
 class AddPeriodScreen extends StatefulWidget {
-  const AddPeriodScreen({super.key});
+  final PeriodModel? periodToEdit; 
+
+  const AddPeriodScreen({super.key, this.periodToEdit});
 
   @override
   State<AddPeriodScreen> createState() => _AddPeriodScreenState();
 }
 
 class _AddPeriodScreenState extends State<AddPeriodScreen> {
-  // Controlador para pegar o texto do input
   final _nameController = TextEditingController();
-  
   bool _isCurrentPeriod = false;
   DateTime? _startDate;
   DateTime? _endDate;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.periodToEdit != null) {
+      _nameController.text = widget.periodToEdit!.name;
+      _startDate = widget.periodToEdit!.startDate;
+      _endDate = widget.periodToEdit!.endDate;
+    }
+  }
 
   String _formatDate(DateTime date) {
     List<String> months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -26,7 +36,8 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
   Future<void> _selectDate(bool isStart) async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: DateTime.now(),
+      locale: const Locale('pt', 'BR'),
+      initialDate: isStart ? (_startDate ?? DateTime.now()) : (_endDate ?? DateTime.now()),
       firstDate: DateTime(2020),
       lastDate: DateTime(2030),
       builder: (context, child) {
@@ -55,8 +66,7 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
   }
 
   // --- FUNÇÃO PARA SALVAR ---
-  void _savePeriod() {
-    // 1. Validação básica
+  Future<void> _savePeriod() async {
     if (_nameController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Por favor, digite um nome para o período.')),
@@ -70,20 +80,38 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
       return;
     }
 
-    // 2. Chama o Provider para salvar no Hive
-    context.read<AcademicProvider>().addPeriod(
-      _nameController.text,
-      _startDate!,
-      _endDate!,
-      _isCurrentPeriod,
-    );
+    var box = await Hive.openBox<PeriodModel>('periodsBox');
 
-    // 3. Fecha a tela e volta para a lista
-    Navigator.pop(context);
+    if (widget.periodToEdit != null) {
+      // --- MODO EDIÇÃO ---
+      final updatedPeriod = PeriodModel(
+        id: widget.periodToEdit!.id,
+        name: _nameController.text,
+        startDate: _startDate!,
+        endDate: _endDate!,
+        subjects: widget.periodToEdit!.subjects, // <--- CORREÇÃO: Mantém as matérias existentes
+      );
+      await box.put(updatedPeriod.id, updatedPeriod);
+    } else {
+      // --- MODO CRIAÇÃO ---
+      final String uniqueId = DateTime.now().millisecondsSinceEpoch.toString();
+      final newPeriod = PeriodModel(
+        id: uniqueId,
+        name: _nameController.text,
+        startDate: _startDate!,
+        endDate: _endDate!,
+        subjects: [], // <--- CORREÇÃO: Inicia com lista vazia
+      );
+      await box.put(uniqueId, newPeriod);
+    }
+
+    if (mounted) Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
+    final isEditing = widget.periodToEdit != null;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -94,11 +122,11 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
           onPressed: () => Navigator.pop(context),
           child: const Text("Cancelar", style: TextStyle(color: AppColors.textSecondary)),
         ),
-        title: const Text("Novo Período", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text(isEditing ? "Editar Período" : "Novo Período", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         centerTitle: true,
         actions: [
           TextButton(
-            onPressed: _savePeriod, // <--- Chama nossa função de salvar
+            onPressed: _savePeriod,
             child: const Text("Salvar", style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
           )
         ],
@@ -112,15 +140,13 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildLabel("Nome do Período"),
-                  
-                  // Input atualizado com Controller
                   Container(
                     decoration: BoxDecoration(
                       color: AppColors.surface,
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: TextField(
-                      controller: _nameController, // <--- Ligamos o controller aqui
+                      controller: _nameController,
                       style: const TextStyle(color: Colors.white),
                       decoration: InputDecoration(
                         hintText: "Ex: 2024.1, Semestre 1",
@@ -131,13 +157,11 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
                       ),
                     ),
                   ),
-
                   const Padding(
                     padding: EdgeInsets.only(top: 8, left: 4),
                     child: Text("Utilize um nome curto para fácil identificação.", 
                       style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                   ),
-                  
                   const SizedBox(height: 32),
                   _buildLabel("Duração"),
                   Container(
@@ -163,7 +187,6 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 32),
                   _buildLabel("Preferências"),
                   Container(
@@ -197,14 +220,13 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
               ),
             ),
           ),
-          
           Padding(
             padding: const EdgeInsets.all(20),
             child: SizedBox(
               width: double.infinity,
               height: 56,
               child: ElevatedButton.icon(
-                onPressed: _savePeriod, // <--- Chama nossa função de salvar
+                onPressed: _savePeriod,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.black,
@@ -221,7 +243,6 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
     );
   }
 
-  // --- Widgets Auxiliares (Iguais ao anterior) ---
   Widget _buildLabel(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
