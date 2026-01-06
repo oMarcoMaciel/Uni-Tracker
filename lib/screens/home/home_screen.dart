@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart'; // <--- Import do Hive
 import '../../core/theme/app_colors.dart';
+import '../../models/user_model.dart'; // <--- Import do User Model
 import '../periods/periods_screen.dart'; 
 import '../settings/settings_screen.dart';
 import '../profile/profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  final int initialIndex; // <--- 1. Nova variável
+  final int initialIndex;
 
-  // 2. Atualize o construtor para receber (padrão é 0/Início)
   const HomeScreen({super.key, this.initialIndex = 0});
 
   @override
@@ -15,12 +16,11 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  late int _selectedIndex; // <--- 3. Mudou de 'int = 0' para 'late int'
+  late int _selectedIndex;
 
   @override
   void initState() {
     super.initState();
-    // 4. Inicializa com o valor que veio do main.dart
     _selectedIndex = widget.initialIndex;
   }
 
@@ -28,6 +28,17 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _selectedIndex = index;
     });
+  }
+
+  // Função auxiliar para pegar as iniciais (Igual à tela de Perfil)
+  String _getInitials(String name) {
+    if (name.isEmpty) return "?";
+    List<String> names = name.trim().split(" ");
+    String initials = names[0][0];
+    if (names.length > 1) {
+      initials += names[names.length - 1][0];
+    }
+    return initials.toUpperCase();
   }
 
   @override
@@ -42,7 +53,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       
-      // Exibe a tela correspondente ao índice selecionado
       body: screens[_selectedIndex],
 
       bottomNavigationBar: Container(
@@ -67,9 +77,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- O RESTO DO SEU CÓDIGO (DASHBOARD E WIDGETS) CONTINUA IGUAL ABAIXO ---
-  // Vou manter o seu código aqui para você poder copiar o arquivo inteiro se quiser
-  
   Widget _buildDashboard() {
     return SafeArea(
       child: SingleChildScrollView(
@@ -77,7 +84,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildHeader(),
+            _buildHeader(), // <--- Agora chama o Header dinâmico
             const SizedBox(height: 24),
             _buildSummaryCards(),
             const SizedBox(height: 32),
@@ -107,37 +114,64 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+   // --- HEADER ATUALIZADO ---
    Widget _buildHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Row(
+    // Usa ValueListenableBuilder para atualizar se o usuário editar o perfil
+    return ValueListenableBuilder(
+      valueListenable: Hive.box<UserModel>('userBox').listenable(),
+      builder: (context, Box<UserModel> box, _) {
+        final user = box.get('currentUser');
+        final userName = user?.name ?? "Visitante"; // Valor padrão se der erro
+
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const CircleAvatar(
-              radius: 24,
-              backgroundImage: NetworkImage('https://i.pravatar.cc/150?img=12'),
-              backgroundColor: AppColors.surface,
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text("Bem-vindo de volta,", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                Text("Gabriel Silva", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+            Row(
+              children: [
+                // AVATAR COM INICIAIS
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: const BoxDecoration(
+                    color: AppColors.surface,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Text(
+                      _getInitials(userName),
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("Bem-vindo de volta,", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                    Text(
+                      userName, // Nome Dinâmico
+                      style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)
+                    ),
+                  ],
+                ),
               ],
             ),
-          ],
-        ),
-        Stack(
-          children: [
-            IconButton(onPressed: () {}, icon: const Icon(Icons.notifications_outlined, color: Colors.white)),
-            Positioned(
-              right: 12, top: 12,
-              child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle)),
+            Stack(
+              children: [
+                IconButton(onPressed: () {}, icon: const Icon(Icons.notifications_outlined, color: Colors.white)),
+                Positioned(
+                  right: 12, top: 12,
+                  child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle)),
+                )
+              ],
             )
           ],
-        )
-      ],
+        );
+      }
     );
   }
 

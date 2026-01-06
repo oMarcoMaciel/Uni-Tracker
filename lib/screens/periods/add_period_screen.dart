@@ -4,7 +4,7 @@ import '../../core/theme/app_colors.dart';
 import '../../models/period_model.dart';
 
 class AddPeriodScreen extends StatefulWidget {
-  final PeriodModel? periodToEdit; 
+  final PeriodModel? periodToEdit; // Recebe o período para edição
 
   const AddPeriodScreen({super.key, this.periodToEdit});
 
@@ -21,10 +21,13 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
   @override
   void initState() {
     super.initState();
+    // Se for edição, carrega os dados existentes
     if (widget.periodToEdit != null) {
       _nameController.text = widget.periodToEdit!.name;
       _startDate = widget.periodToEdit!.startDate;
       _endDate = widget.periodToEdit!.endDate;
+      // CORREÇÃO CRÍTICA: Carrega o valor salvo do banco
+      _isCurrentPeriod = widget.periodToEdit!.isCurrent; 
     }
   }
 
@@ -38,7 +41,7 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
       context: context,
       locale: const Locale('pt', 'BR'),
       initialDate: isStart ? (_startDate ?? DateTime.now()) : (_endDate ?? DateTime.now()),
-      firstDate: DateTime(2020),
+      firstDate: DateTime(2000),
       lastDate: DateTime(2030),
       builder: (context, child) {
         return Theme(
@@ -65,23 +68,41 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
     }
   }
 
-  // --- FUNÇÃO PARA SALVAR ---
+  // --- FUNÇÃO PARA SALVAR COM LÓGICA DE ÚNICO ATIVO ---
   Future<void> _savePeriod() async {
+    // Validações
     if (_nameController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Por favor, digite um nome para o período.')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Por favor, digite um nome.')));
       return;
     }
     if (_startDate == null || _endDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Selecione as datas de início e fim.')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Selecione as datas.')));
       return;
     }
 
     var box = await Hive.openBox<PeriodModel>('periodsBox');
 
+    // LÓGICA: Se este for marcado como atual, desmarca TODOS os outros
+    if (_isCurrentPeriod) {
+      for (var period in box.values) {
+        // Se encontrarmos outro período marcado como atual (que não é o que estamos editando)
+        if (period.isCurrent && period.id != widget.periodToEdit?.id) {
+          // Cria uma cópia com isCurrent = false
+          final deactivatedPeriod = PeriodModel(
+            id: period.id,
+            name: period.name,
+            startDate: period.startDate,
+            endDate: period.endDate,
+            subjects: period.subjects, // Mantém as matérias
+            isCurrent: false, // <--- Desativa
+          );
+          // Salva a alteração
+          await box.put(period.id, deactivatedPeriod);
+        }
+      }
+    }
+
+    // Salva o período atual (Novo ou Editado)
     if (widget.periodToEdit != null) {
       // --- MODO EDIÇÃO ---
       final updatedPeriod = PeriodModel(
@@ -89,7 +110,8 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
         name: _nameController.text,
         startDate: _startDate!,
         endDate: _endDate!,
-        subjects: widget.periodToEdit!.subjects, // <--- CORREÇÃO: Mantém as matérias existentes
+        subjects: widget.periodToEdit!.subjects, // Mantém matérias antigas
+        isCurrent: _isCurrentPeriod, // Salva a escolha do usuário
       );
       await box.put(updatedPeriod.id, updatedPeriod);
     } else {
@@ -100,7 +122,8 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
         name: _nameController.text,
         startDate: _startDate!,
         endDate: _endDate!,
-        subjects: [], // <--- CORREÇÃO: Inicia com lista vazia
+        subjects: [], // Lista vazia para novo
+        isCurrent: _isCurrentPeriod, // Salva a escolha do usuário
       );
       await box.put(uniqueId, newPeriod);
     }
@@ -141,10 +164,7 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
                 children: [
                   _buildLabel("Nome do Período"),
                   Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
+                    decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(16)),
                     child: TextField(
                       controller: _nameController,
                       style: const TextStyle(color: Colors.white),
@@ -157,51 +177,30 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
                       ),
                     ),
                   ),
-                  const Padding(
-                    padding: EdgeInsets.only(top: 8, left: 4),
-                    child: Text("Utilize um nome curto para fácil identificação.", 
-                      style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                  ),
+                  const Padding(padding: EdgeInsets.only(top: 8, left: 4), child: Text("Utilize um nome curto para fácil identificação.", style: TextStyle(color: AppColors.textSecondary, fontSize: 12))),
+                  
                   const SizedBox(height: 32),
                   _buildLabel("Duração"),
                   Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
+                    decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(16)),
                     child: Column(
                       children: [
-                        _buildDateItem(
-                          title: "Data de Início",
-                          icon: Icons.calendar_today,
-                          date: _startDate,
-                          onTap: () => _selectDate(true),
-                        ),
+                        _buildDateItem(title: "Data de Início", icon: Icons.calendar_today, date: _startDate, onTap: () => _selectDate(true)),
                         const Divider(height: 1, color: Colors.white10, indent: 56),
-                        _buildDateItem(
-                          title: "Data de Fim",
-                          icon: Icons.event,
-                          date: _endDate,
-                          onTap: () => _selectDate(false),
-                        ),
+                        _buildDateItem(title: "Data de Fim", icon: Icons.event, date: _endDate, onTap: () => _selectDate(false)),
                       ],
                     ),
                   ),
+
                   const SizedBox(height: 32),
                   _buildLabel("Preferências"),
                   Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
+                    decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(16)),
                     child: ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       leading: Container(
                         padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.1),
-                          shape: BoxShape.circle,
-                        ),
+                        decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), shape: BoxShape.circle),
                         child: const Icon(Icons.verified, color: AppColors.textSecondary, size: 20),
                       ),
                       title: const Text("Período Atual", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -259,27 +258,16 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
           children: [
             Container(
               padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(12),
-              ),
+              decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(12)),
               child: Icon(icon, color: AppColors.primary, size: 20),
             ),
             const SizedBox(width: 16),
-            Expanded(
-              child: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
-            ),
+            Expanded(child: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500))),
             if (date != null)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  _formatDate(date),
-                  style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 12),
-                ),
+                decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                child: Text(_formatDate(date), style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 12)),
               )
             else
               Row(
