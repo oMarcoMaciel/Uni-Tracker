@@ -56,8 +56,6 @@ class _SubjectDetailsScreenState extends State<SubjectDetailsScreen> {
     _subject.note = _noteController.text; // Atualiza a variável local
     await box.put(_subject.id, _subject);
     
-    await Future.delayed(const Duration(milliseconds: 500));
-    
     if (mounted) {
       setState(() => _isSavingNote = false);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Anotação salva!")));
