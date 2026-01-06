@@ -58,7 +58,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title: "Tema Escuro",
                     trailing: Switch(
                       value: _isDarkMode,
-                      activeColor: AppColors.primary,
+                      activeThumbColor: AppColors.primary,
                       activeTrackColor: AppColors.primary.withOpacity(0.3),
                       inactiveThumbColor: Colors.grey,
                       inactiveTrackColor: Colors.grey[800],
