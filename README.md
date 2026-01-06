@@ -50,8 +50,3 @@ lib/
 │   └── settings/       # Configurações do App
 ├── widgets/            # Componentes reutilizáveis (Cards, Inputs)
 └── main.dart           # Ponto de entrada
-
----
-
-
-Desenvolvido por Marco Maciel
