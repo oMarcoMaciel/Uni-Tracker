@@ -1,8 +1,8 @@
-import 'dart:io'; 
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:image_picker/image_picker.dart'; 
-import 'package:path_provider/path_provider.dart'; 
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/user_model.dart';
 import '../../models/subject_model.dart';
@@ -11,39 +11,32 @@ import '../../models/period_model.dart';
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
-  // --- LÓGICA DE UPLOAD DA FOTO (CORRIGIDA) ---
+  // --- 1. LÓGICA DE UPLOAD DA FOTO (MANTIDA) ---
   Future<void> _pickAndSaveImage(BuildContext context) async {
     try {
       final ImagePicker picker = ImagePicker();
-      // 1. Abre a galeria
       final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-      
+
       if (image != null) {
-        // 2. Encontra a pasta segura
         final directory = await getApplicationDocumentsDirectory();
         final String path = directory.path;
-        
-        // TRUQUE: Usamos o horário atual no nome para evitar problema de cache
         final String fileName = 'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        
-        // 3. Salva a nova foto
         final File localImage = await File(image.path).copy('$path/$fileName');
 
-        // 4. Atualiza no Hive
         var box = Hive.box<UserModel>('userBox');
         var user = box.get('currentUser');
-        
+
         if (user != null) {
-          // (Opcional) Apaga a foto antiga para não encher a memória do celular
+          // Apaga foto antiga se existir
           if (user.profileImagePath != null) {
             final oldFile = File(user.profileImagePath!);
             if (await oldFile.exists()) {
-              await oldFile.delete(); 
+              await oldFile.delete();
             }
           }
 
-          user.profileImagePath = localImage.path; // Salva o novo caminho
-          user.save(); // Notifica a tela para atualizar
+          user.profileImagePath = localImage.path;
+          user.save();
         }
       }
     } catch (e) {
@@ -55,7 +48,74 @@ class ProfileScreen extends StatelessWidget {
     }
   }
 
-  // --- CÁLCULOS ---
+  // --- 2. NOVA LÓGICA: REMOVER FOTO ---
+  Future<void> _removeProfileImage(BuildContext context) async {
+    var box = Hive.box<UserModel>('userBox');
+    var user = box.get('currentUser');
+
+    if (user != null && user.profileImagePath != null) {
+      try {
+        final file = File(user.profileImagePath!);
+        if (await file.exists()) {
+          await file.delete(); // Deleta o arquivo físico
+        }
+        user.profileImagePath = null; // Remove a referência no Hive
+        user.save(); // Atualiza a tela
+        
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Foto removida com sucesso.')),
+          );
+        }
+      } catch (e) {
+        // Tratar erro silenciosamente ou avisar usuário
+      }
+    }
+  }
+
+  // --- 3. NOVA LÓGICA: EXIBIR MENU DE OPÇÕES ---
+  void _showImageOptions(BuildContext context, bool hasImage) {
+    // Se não tem imagem, vai direto para a galeria
+    if (!hasImage) {
+      _pickAndSaveImage(context);
+      return;
+    }
+
+    // Se tem imagem, mostra o menu inferior
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface, // Fundo escuro conforme seu tema
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library, color: Colors.white),
+                title: const Text('Alterar Foto de Perfil', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(context); // Fecha o menu
+                  _pickAndSaveImage(context);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                title: const Text('Remover Foto de Perfil', style: TextStyle(color: Colors.redAccent)),
+                onTap: () {
+                  Navigator.pop(context); // Fecha o menu
+                  _removeProfileImage(context);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // --- CÁLCULOS (MANTIDOS) ---
   String _calculateGlobalAverage() {
     final box = Hive.box<SubjectModel>('subjects');
     final subjects = box.values.toList();
@@ -137,7 +197,8 @@ class ProfileScreen extends StatelessWidget {
                       
                       // 2. Imagem ou Iniciais
                       GestureDetector(
-                        onTap: () => _pickAndSaveImage(context),
+                        // MUDANÇA AQUI: Chama o menu de opções
+                        onTap: () => _showImageOptions(context, hasImage),
                         child: Container(
                           width: 120, height: 120,
                           decoration: BoxDecoration(
@@ -166,7 +227,8 @@ class ProfileScreen extends StatelessWidget {
                       Positioned(
                         bottom: 0, right: 0,
                         child: GestureDetector(
-                          onTap: () => _pickAndSaveImage(context),
+                           // MUDANÇA AQUI TAMBÉM: Mesmo comportamento do avatar
+                          onTap: () => _showImageOptions(context, hasImage),
                           child: Container(
                             padding: const EdgeInsets.all(8),
                             decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
