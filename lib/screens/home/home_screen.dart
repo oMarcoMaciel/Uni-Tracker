@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart'; // <--- Import do Hive
 import '../../core/theme/app_colors.dart';
-import '../../models/user_model.dart'; // <--- Import do User Model
+import '../../models/user_model.dart';
+import '../../models/period_model.dart'; // <--- Import dos Períodos
+import '../../models/subject_model.dart'; // <--- Import das Matérias
 import '../periods/periods_screen.dart'; 
 import '../settings/settings_screen.dart';
 import '../profile/profile_screen.dart';
@@ -30,7 +32,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // Função auxiliar para pegar as iniciais (Igual à tela de Perfil)
   String _getInitials(String name) {
     if (name.isEmpty) return "?";
     List<String> names = name.trim().split(" ");
@@ -43,18 +44,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Lista de telas que o rodapé controla
     final List<Widget> screens = [
-      _buildDashboard(),     // Índice 0
-      const PeriodsScreen(), // Índice 1
-      const ProfileScreen(), // Índice 2
+      _buildDashboard(),
+      const PeriodsScreen(),
+      const ProfileScreen(),
     ];
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      
       body: screens[_selectedIndex],
-
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
           border: Border(top: BorderSide(color: Colors.white10, width: 1)),
@@ -84,9 +82,9 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildHeader(), // <--- Agora chama o Header dinâmico
+            _buildHeader(),
             const SizedBox(height: 24),
-            _buildSummaryCards(),
+            _buildSummaryCards(), // <--- Cards Inteligentes agora
             const SizedBox(height: 32),
             const Text("Acesso Rápido", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
@@ -114,21 +112,18 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-   // --- HEADER ATUALIZADO ---
    Widget _buildHeader() {
-    // Usa ValueListenableBuilder para atualizar se o usuário editar o perfil
     return ValueListenableBuilder(
       valueListenable: Hive.box<UserModel>('userBox').listenable(),
       builder: (context, Box<UserModel> box, _) {
         final user = box.get('currentUser');
-        final userName = user?.name ?? "Visitante"; // Valor padrão se der erro
+        final userName = user?.name ?? "Estudante";
 
         return Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Row(
               children: [
-                // AVATAR COM INICIAIS
                 Container(
                   width: 48,
                   height: 48,
@@ -139,11 +134,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Center(
                     child: Text(
                       _getInitials(userName),
-                      style: const TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                      ),
+                      style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 18),
                     ),
                   ),
                 ),
@@ -152,10 +143,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text("Bem-vindo de volta,", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                    Text(
-                      userName, // Nome Dinâmico
-                      style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)
-                    ),
+                    Text(userName, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
                   ],
                 ),
               ],
@@ -175,68 +163,116 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // --- AQUI ESTÁ A MÁGICA DOS CÁLCULOS ---
   Widget _buildSummaryCards() {
-    return Row(
-      children: [
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(16)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    // 1. Ouvir Períodos (Para calcular progresso do semestre)
+    return ValueListenableBuilder(
+      valueListenable: Hive.box<PeriodModel>('periodsBox').listenable(),
+      builder: (context, Box<PeriodModel> periodsBox, _) {
+        
+        // Lógica do Progresso do Semestre
+        double progress = 0.0;
+        String semesterLabel = "Sem Período Ativo";
+        
+        try {
+          final currentPeriod = periodsBox.values.firstWhere((p) => p.isCurrent);
+          semesterLabel = currentPeriod.name;
+          
+          final totalDays = currentPeriod.endDate.difference(currentPeriod.startDate).inDays;
+          final elapsedDays = DateTime.now().difference(currentPeriod.startDate).inDays;
+
+          if (totalDays > 0) {
+            progress = elapsedDays / totalDays;
+            // Trava entre 0 e 1 (0% e 100%)
+            if (progress < 0) progress = 0;
+            if (progress > 1) progress = 1;
+          }
+        } catch (e) {
+          // Nenhum período ativo encontrado
+        }
+
+        // 2. Ouvir Matérias (Para calcular Média Geral)
+        return ValueListenableBuilder(
+          valueListenable: Hive.box<SubjectModel>('subjects').listenable(),
+          builder: (context, Box<SubjectModel> subjectsBox, _) {
+            
+            double totalAvg = 0;
+            int count = 0;
+            
+            for (var subject in subjectsBox.values) {
+              if (subject.grades.isNotEmpty) {
+                double subjectAvg = subject.grades.map((g) => g.value).reduce((a, b) => a + b) / subject.grades.length;
+                totalAvg += subjectAvg;
+                count++;
+              }
+            }
+            
+            String globalAvg = count > 0 ? (totalAvg / count).toStringAsFixed(1) : "0.0";
+
+            return Row(
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: const [
-                    Text("MÉDIA GERAL", style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
-                    Icon(Icons.school, color: AppColors.surface, size: 20),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                const Text("8.5", style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Row(
-                  children: const [
-                    Icon(Icons.trending_up, color: AppColors.primary, size: 16),
-                    SizedBox(width: 4),
-                    Text("+0.2 este mês", style: TextStyle(color: AppColors.primary, fontSize: 12)),
-                  ],
-                )
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(16)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: const [
-                    Text("SEMESTRE", style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
-                    Icon(Icons.pie_chart, color: AppColors.surface, size: 20),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                const Text("75%", style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Container(
-                  height: 6, width: double.infinity,
-                  decoration: BoxDecoration(color: Colors.grey[800], borderRadius: BorderRadius.circular(10)),
-                  child: FractionallySizedBox(
-                    alignment: Alignment.centerLeft, widthFactor: 0.75,
-                    child: Container(decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(10))),
+                // CARD 1: MÉDIA GERAL
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(16)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: const [
+                            Text("MÉDIA GERAL", style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
+                            Icon(Icons.school, color: AppColors.surface, size: 20),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(globalAvg, style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        // Removi o texto de tendência ("+0.2") pois não temos histórico ainda
+                        const Text("Acumulado", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                      ],
+                    ),
                   ),
-                )
+                ),
+                const SizedBox(width: 16),
+                
+                // CARD 2: PROGRESSO DO SEMESTRE
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(16)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: const [
+                            Text("SEMESTRE", style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
+                            Icon(Icons.pie_chart, color: AppColors.surface, size: 20),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text("${(progress * 100).toInt()}%", style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        Container(
+                          height: 6, width: double.infinity,
+                          decoration: BoxDecoration(color: Colors.grey[800], borderRadius: BorderRadius.circular(10)),
+                          child: FractionallySizedBox(
+                            alignment: Alignment.centerLeft, 
+                            widthFactor: progress, // Valor dinâmico
+                            child: Container(decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(10))),
+                          ),
+                        )
+                      ],
+                    ),
+                  ),
+                ),
               ],
-            ),
-          ),
-        ),
-      ],
+            );
+          }
+        );
+      }
     );
   }
 

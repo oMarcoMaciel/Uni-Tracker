@@ -1,5 +1,8 @@
+import 'dart:io'; 
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:image_picker/image_picker.dart'; 
+import 'package:path_provider/path_provider.dart'; 
 import '../../core/theme/app_colors.dart';
 import '../../models/user_model.dart';
 import '../../models/subject_model.dart';
@@ -8,16 +11,57 @@ import '../../models/period_model.dart';
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
-  // Função auxiliar para calcular o CR (Média Global)
+  // --- LÓGICA DE UPLOAD DA FOTO (CORRIGIDA) ---
+  Future<void> _pickAndSaveImage(BuildContext context) async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      // 1. Abre a galeria
+      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+      
+      if (image != null) {
+        // 2. Encontra a pasta segura
+        final directory = await getApplicationDocumentsDirectory();
+        final String path = directory.path;
+        
+        // TRUQUE: Usamos o horário atual no nome para evitar problema de cache
+        final String fileName = 'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        
+        // 3. Salva a nova foto
+        final File localImage = await File(image.path).copy('$path/$fileName');
+
+        // 4. Atualiza no Hive
+        var box = Hive.box<UserModel>('userBox');
+        var user = box.get('currentUser');
+        
+        if (user != null) {
+          // (Opcional) Apaga a foto antiga para não encher a memória do celular
+          if (user.profileImagePath != null) {
+            final oldFile = File(user.profileImagePath!);
+            if (await oldFile.exists()) {
+              await oldFile.delete(); 
+            }
+          }
+
+          user.profileImagePath = localImage.path; // Salva o novo caminho
+          user.save(); // Notifica a tela para atualizar
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Erro ao selecionar foto.')),
+        );
+      }
+    }
+  }
+
+  // --- CÁLCULOS ---
   String _calculateGlobalAverage() {
     final box = Hive.box<SubjectModel>('subjects');
     final subjects = box.values.toList();
-    
     if (subjects.isEmpty) return "0.0";
-
     double totalSum = 0;
     int count = 0;
-
     for (var subject in subjects) {
       if (subject.grades.isNotEmpty) {
         double subjectAvg = subject.grades.map((g) => g.value).reduce((a, b) => a + b) / subject.grades.length;
@@ -25,19 +69,16 @@ class ProfileScreen extends StatelessWidget {
         count++;
       }
     }
-
     if (count == 0) return "0.0";
     return (totalSum / count).toStringAsFixed(1);
   }
 
-  // Função auxiliar para contar períodos (Semestre atual aproximado)
   String _calculateSemesterCount() {
     final box = Hive.box<PeriodModel>('periodsBox');
     int count = box.length;
     return count == 0 ? "1º" : "${count}º";
   }
 
-  // Função para pegar as iniciais do nome
   String _getInitials(String name) {
     if (name.isEmpty) return "?";
     List<String> names = name.trim().split(" ");
@@ -56,33 +97,22 @@ class ProfileScreen extends StatelessWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
-        title: const Text(
-          "Perfil",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
+        title: const Text("Perfil", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         actions: [
           TextButton(
-            onPressed: () {
-              // Futuro: Editar Perfil
-            },
-            child: const Text(
-              "Editar",
-              style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
-            ),
+            onPressed: () { /* Futuro: Editar dados de texto */ },
+            child: const Text("Editar", style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
           )
         ],
       ),
-      // OUVINTE DO USUÁRIO
       body: ValueListenableBuilder(
         valueListenable: Hive.box<UserModel>('userBox').listenable(),
         builder: (context, Box<UserModel> box, _) {
-          
           final user = box.get('currentUser');
+          if (user == null) return const Center(child: Text("Erro: Usuário não encontrado"));
 
-          // Caso de segurança (não deve acontecer se o onboarding funcionar)
-          if (user == null) {
-            return const Center(child: Text("Usuário não encontrado", style: TextStyle(color: Colors.white)));
-          }
+          // Verifica se o arquivo existe de fato no celular
+          bool hasImage = user.profileImagePath != null && File(user.profileImagePath!).existsSync();
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(20),
@@ -90,56 +120,58 @@ class ProfileScreen extends StatelessWidget {
               children: [
                 const SizedBox(height: 20),
                 
-                // 1. AVATAR DINÂMICO
+                // --- ÁREA DO AVATAR ---
                 Center(
                   child: Stack(
                     children: [
-                      // Glow
+                      // 1. Brilho
                       Container(
-                        width: 120,
-                        height: 120,
+                        width: 120, height: 120,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           boxShadow: [
-                            BoxShadow(
-                              color: AppColors.primary.withOpacity(0.2),
-                              blurRadius: 40,
-                              spreadRadius: 10,
-                            ),
+                            BoxShadow(color: AppColors.primary.withOpacity(0.2), blurRadius: 40, spreadRadius: 10),
                           ],
                         ),
                       ),
-                      // Avatar com Iniciais
-                      Container(
-                        width: 120,
-                        height: 120,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: AppColors.surface, // Cor de fundo do avatar
-                          border: Border.all(color: AppColors.primary, width: 2),
-                        ),
-                        child: Center(
-                          child: Text(
-                            _getInitials(user.name),
-                            style: const TextStyle(
-                              color: AppColors.primary,
-                              fontSize: 40,
-                              fontWeight: FontWeight.bold,
-                            ),
+                      
+                      // 2. Imagem ou Iniciais
+                      GestureDetector(
+                        onTap: () => _pickAndSaveImage(context),
+                        child: Container(
+                          width: 120, height: 120,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppColors.surface,
+                            border: Border.all(color: AppColors.primary, width: 2),
+                            image: hasImage 
+                              ? DecorationImage(
+                                  image: FileImage(File(user.profileImagePath!)),
+                                  fit: BoxFit.cover,
+                                )
+                              : null,
                           ),
+                          child: hasImage 
+                            ? null 
+                            : Center(
+                                child: Text(
+                                  _getInitials(user.name),
+                                  style: const TextStyle(color: AppColors.primary, fontSize: 40, fontWeight: FontWeight.bold),
+                                ),
+                              ),
                         ),
                       ),
-                      // Ícone de lápis
+
+                      // 3. Ícone Câmera
                       Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: const BoxDecoration(
-                            color: AppColors.primary,
-                            shape: BoxShape.circle,
+                        bottom: 0, right: 0,
+                        child: GestureDetector(
+                          onTap: () => _pickAndSaveImage(context),
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
+                            child: const Icon(Icons.camera_alt, color: Colors.black, size: 20),
                           ),
-                          child: const Icon(Icons.camera_alt, color: Colors.black, size: 20),
                         ),
                       )
                     ],
@@ -148,23 +180,13 @@ class ProfileScreen extends StatelessWidget {
                 
                 const SizedBox(height: 24),
                 
-                // 2. NOME E CURSO REAIS
-                Text(
-                  user.name,
-                  style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center,
-                ),
+                Text(user.name, style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
                 const SizedBox(height: 8),
-                Text(
-                  "${user.course} - ${user.university}",
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 16),
-                  textAlign: TextAlign.center,
-                ),
+                Text("${user.course} - ${user.university}", style: const TextStyle(color: AppColors.textSecondary, fontSize: 16), textAlign: TextAlign.center),
 
                 const SizedBox(height: 40),
 
-                // 3. ESTATÍSTICAS REAIS
-                // Como as notas e períodos mudam, usamos ValueListenable para atualizar isso também
+                // Estatísticas
                 ValueListenableBuilder(
                   valueListenable: Hive.box<SubjectModel>('subjects').listenable(),
                   builder: (context, _, __) {
@@ -180,19 +202,9 @@ class ProfileScreen extends StatelessWidget {
                 ),
 
                 const SizedBox(height: 20),
-
-                // 4. INFORMAÇÕES PESSOAIS
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    "Informações Pessoais",
-                    style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                ),
+                const Align(alignment: Alignment.centerLeft, child: Text("Informações Pessoais", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold))),
                 const SizedBox(height: 24),
-                
                 _buildInfoItem("Email Cadastrado", user.email, Icons.email_outlined),
-                // Removi a matrícula pois não pedimos no cadastro, mas você pode adicionar depois
               ],
             ),
           );
@@ -202,37 +214,20 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Widget _buildStatRow(String label, String value) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(color: Colors.white, fontSize: 16),
-        ),
-        Text(
-          value,
-          style: const TextStyle(color: AppColors.primary, fontSize: 24, fontWeight: FontWeight.bold),
-        ),
-      ],
-    );
+    return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+      Text(label, style: const TextStyle(color: Colors.white, fontSize: 16)),
+      Text(value, style: const TextStyle(color: AppColors.primary, fontSize: 24, fontWeight: FontWeight.bold)),
+    ]);
   }
 
   Widget _buildInfoItem(String label, String value, IconData icon) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-              const SizedBox(height: 4),
-              Text(value, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500)),
-            ],
-          ),
-        ),
-        Icon(icon, color: AppColors.textSecondary, size: 20),
-      ],
-    );
+    return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+        const SizedBox(height: 4),
+        Text(value, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500)),
+      ])),
+      Icon(icon, color: AppColors.textSecondary, size: 20),
+    ]);
   }
 }

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:hive_flutter/hive_flutter.dart'; // <--- Trocamos Provider por Hive
+import 'package:hive_flutter/hive_flutter.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/period_model.dart';
 import 'add_period_screen.dart';
@@ -12,6 +12,26 @@ class PeriodsScreen extends StatelessWidget {
   String _formatDateRange(DateTime start, DateTime end) {
     List<String> months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
     return "${months[start.month - 1]} - ${months[end.month - 1]}";
+  }
+
+  // --- NOVA FUNÇÃO: CALCULAR PROGRESSO ---
+  double _calculateProgress(DateTime start, DateTime end) {
+    final now = DateTime.now();
+
+    // Se ainda não começou, progresso é 0
+    if (now.isBefore(start)) return 0.0;
+
+    // Se já acabou, progresso é 1 (100%)
+    if (now.isAfter(end)) return 1.0;
+
+    // Cálculo da porcentagem decorrida
+    final totalDuration = end.difference(start).inDays;
+    final elapsedDuration = now.difference(start).inDays;
+
+    // Evita divisão por zero
+    if (totalDuration <= 0) return 1.0;
+
+    return elapsedDuration / totalDuration;
   }
 
   @override
@@ -131,6 +151,9 @@ class PeriodsScreen extends StatelessWidget {
   }
 
   Widget _buildCurrentPeriodCard(BuildContext context, PeriodModel period) {
+    // CALCULA O PROGRESSO ANTES DE MONTAR O CARD
+    double progress = _calculateProgress(period.startDate, period.endDate);
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -165,11 +188,11 @@ class PeriodsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           
-          // Barra de Progresso (Visual)
+          // Barra de Progresso (AGORA DINÂMICA)
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: LinearProgressIndicator(
-              value: 0.5, 
+              value: progress, // <--- Valor calculado dinamicamente
               backgroundColor: Colors.grey[800],
               color: AppColors.primary,
               minHeight: 8,

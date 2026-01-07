@@ -20,19 +20,25 @@ class GradeModelAdapter extends TypeAdapter<GradeModel> {
       id: fields[0] as String,
       name: fields[1] as String,
       value: fields[2] as double,
+      weight: fields[3] as double,
+      unit: fields[4] as String,
     );
   }
 
   @override
   void write(BinaryWriter writer, GradeModel obj) {
     writer
-      ..writeByte(3)
+      ..writeByte(5)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
       ..write(obj.name)
       ..writeByte(2)
-      ..write(obj.value);
+      ..write(obj.value)
+      ..writeByte(3)
+      ..write(obj.weight)
+      ..writeByte(4)
+      ..write(obj.unit);
   }
 
   @override
