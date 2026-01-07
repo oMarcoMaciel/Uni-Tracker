@@ -19,7 +19,7 @@ import 'providers/academic_provider.dart';
 // --- CONFIGURAÇÃO DE DESENVOLVIMENTO ---
 // Mude para TRUE se quiser pular o cadastro durante os testes.
 // Mude para FALSE para testar como um usuário novo veria.
-const bool DEV_SKIP_ONBOARDING = true; 
+const bool DEV_SKIP_ONBOARDING = false; 
 // ----------------------------------------
 
 void main() async {
@@ -57,7 +57,7 @@ class UniTrackerApp extends StatelessWidget {
     required this.isFirstRun,
   });
 
-  @override
+@override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
@@ -66,12 +66,38 @@ class UniTrackerApp extends StatelessWidget {
       child: MaterialApp(
         title: 'UniTracker',
         debugShowCheckedModeBanner: false,
+        
+        // --- TEMA ATUALIZADO PARA EVITAR TELA BRANCA ---
         theme: ThemeData(
+          // 1. Define que é um esquema escuro nativamente
+          brightness: Brightness.dark, 
+          
           primaryColor: AppColors.primary,
           scaffoldBackgroundColor: AppColors.background,
+          
+          // 2. O 'canvas' é o fundo que aparece durante transições.
+          // Mudando para a cor do background, o flash branco some.
+          canvasColor: AppColors.background, 
+
+          // 3. Define as cores principais do esquema Dark
+          colorScheme: ColorScheme.dark(
+            primary: AppColors.primary,
+            background: AppColors.background,
+            surface: AppColors.surface, // Se não tiver surface, use background aqui também
+          ),
+
           textTheme: GoogleFonts.poppinsTextTheme(),
           useMaterial3: true,
+
+          // 4. Animações de transição mais suaves (Zoom no Android)
+          pageTransitionsTheme: const PageTransitionsTheme(
+            builders: {
+              TargetPlatform.android: ZoomPageTransitionsBuilder(),
+              TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+            },
+          ),
         ),
+
         supportedLocales: const [
           Locale('pt', 'BR'),
         ],
@@ -81,13 +107,11 @@ class UniTrackerApp extends StatelessWidget {
           GlobalCupertinoLocalizations.delegate,
         ],
         
-        // --- CORREÇÃO AQUI ---
-        // Chama a função que verifica o Onboarding primeiro
         home: _decideInitialScreen(), 
       ),
     );
   }
-
+  
   // Função Mestra: Decide se vai para Onboarding ou Home
   Widget _decideInitialScreen() {
     // 1. Se for modo DEV e quisermos pular
