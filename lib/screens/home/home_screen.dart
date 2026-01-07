@@ -1,9 +1,10 @@
+import 'dart:io'; // <--- OBRIGATÓRIO: Para usar File()
 import 'package:flutter/material.dart';
-import 'package:hive_flutter/hive_flutter.dart'; // <--- Import do Hive
+import 'package:hive_flutter/hive_flutter.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/user_model.dart';
-import '../../models/period_model.dart'; // <--- Import dos Períodos
-import '../../models/subject_model.dart'; // <--- Import das Matérias
+import '../../models/period_model.dart';
+import '../../models/subject_model.dart';
 import '../periods/periods_screen.dart'; 
 import '../settings/settings_screen.dart';
 import '../profile/profile_screen.dart';
@@ -82,9 +83,9 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildHeader(),
+            _buildHeader(), // <--- Aqui está a mágica da foto
             const SizedBox(height: 24),
-            _buildSummaryCards(), // <--- Cards Inteligentes agora
+            _buildSummaryCards(),
             const SizedBox(height: 32),
             const Text("Acesso Rápido", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
@@ -118,6 +119,12 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (context, Box<UserModel> box, _) {
         final user = box.get('currentUser');
         final userName = user?.name ?? "Estudante";
+        
+        // --- CORREÇÃO AQUI: Usando profileImagePath e verificando existência ---
+        final imagePath = user?.profileImagePath;
+        final bool hasImage = imagePath != null && 
+                              imagePath.isNotEmpty && 
+                              File(imagePath).existsSync(); // Verifica se o arquivo existe mesmo
 
         return Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -127,16 +134,26 @@ class _HomeScreenState extends State<HomeScreen> {
                 Container(
                   width: 48,
                   height: 48,
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     color: AppColors.surface,
                     shape: BoxShape.circle,
+                    // Se tiver imagem válida, mostra ela. Se não, nulo.
+                    image: hasImage 
+                        ? DecorationImage(
+                            image: FileImage(File(imagePath!)),
+                            fit: BoxFit.cover,
+                          )
+                        : null,
                   ),
-                  child: Center(
-                    child: Text(
-                      _getInitials(userName),
-                      style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 18),
-                    ),
-                  ),
+                  // Se NÃO tiver imagem, mostra as iniciais
+                  child: hasImage 
+                      ? null 
+                      : Center(
+                          child: Text(
+                            _getInitials(userName),
+                            style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 18),
+                          ),
+                        ),
                 ),
                 const SizedBox(width: 12),
                 Column(
@@ -163,27 +180,21 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- AQUI ESTÁ A MÁGICA DOS CÁLCULOS ---
   Widget _buildSummaryCards() {
-    // 1. Ouvir Períodos (Para calcular progresso do semestre)
     return ValueListenableBuilder(
       valueListenable: Hive.box<PeriodModel>('periodsBox').listenable(),
       builder: (context, Box<PeriodModel> periodsBox, _) {
         
-        // Lógica do Progresso do Semestre
         double progress = 0.0;
-        String semesterLabel = "Sem Período Ativo";
         
         try {
           final currentPeriod = periodsBox.values.firstWhere((p) => p.isCurrent);
-          semesterLabel = currentPeriod.name;
           
           final totalDays = currentPeriod.endDate.difference(currentPeriod.startDate).inDays;
           final elapsedDays = DateTime.now().difference(currentPeriod.startDate).inDays;
 
           if (totalDays > 0) {
             progress = elapsedDays / totalDays;
-            // Trava entre 0 e 1 (0% e 100%)
             if (progress < 0) progress = 0;
             if (progress > 1) progress = 1;
           }
@@ -191,7 +202,6 @@ class _HomeScreenState extends State<HomeScreen> {
           // Nenhum período ativo encontrado
         }
 
-        // 2. Ouvir Matérias (Para calcular Média Geral)
         return ValueListenableBuilder(
           valueListenable: Hive.box<SubjectModel>('subjects').listenable(),
           builder: (context, Box<SubjectModel> subjectsBox, _) {
@@ -211,7 +221,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
             return Row(
               children: [
-                // CARD 1: MÉDIA GERAL
                 Expanded(
                   child: Container(
                     padding: const EdgeInsets.all(16),
@@ -229,7 +238,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         const SizedBox(height: 8),
                         Text(globalAvg, style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
-                        // Removi o texto de tendência ("+0.2") pois não temos histórico ainda
                         const Text("Acumulado", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                       ],
                     ),
@@ -237,7 +245,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(width: 16),
                 
-                // CARD 2: PROGRESSO DO SEMESTRE
                 Expanded(
                   child: Container(
                     padding: const EdgeInsets.all(16),
@@ -260,7 +267,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           decoration: BoxDecoration(color: Colors.grey[800], borderRadius: BorderRadius.circular(10)),
                           child: FractionallySizedBox(
                             alignment: Alignment.centerLeft, 
-                            widthFactor: progress, // Valor dinâmico
+                            widthFactor: progress, 
                             child: Container(decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(10))),
                           ),
                         )

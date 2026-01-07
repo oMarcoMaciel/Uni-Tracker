@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/subject_model.dart';
@@ -195,19 +196,16 @@ class _SubjectDetailsScreenState extends State<SubjectDetailsScreen> {
     }
   }
 
-  // --- MODAL DE ADICIONAR NOTA ---
+// --- MODAL DE ADICIONAR NOTA ---
   void _showAddGradeDialog() {
     final nameController = TextEditingController();
     final gradeController = TextEditingController();
     final weightController = TextEditingController();
 
-    // Lista dinâmica: Só mostra Final se a lógica permitir
+    // Lista dinâmica
     final List<String> units = ['Unidade 1', 'Unidade 2'];
     
-    // Verifica se deve mostrar Final OU se já existe uma Final (para permitir editar/adicionar caso o user tenha apagado)
     if (_shouldShowFinal() || _getFinalGrade() != null) {
-       // Só adiciona se não tiver final já cadastrada, ou se quiser permitir múltiplas (mas a lógica de cálculo assume uma única nota final)
-       // Para simplificar, adicionamos a opção.
        if (!units.contains('Final')) units.add('Final');
     }
 
@@ -244,6 +242,8 @@ class _SubjectDetailsScreenState extends State<SubjectDetailsScreen> {
                     ],
                   ),
                   const SizedBox(height: 24),
+                  
+                  // DROPDOWN UNIDADE
                   const Text("Selecione a Unidade",
                       style: TextStyle(
                           color: AppColors.textSecondary, fontSize: 12)),
@@ -274,6 +274,8 @@ class _SubjectDetailsScreenState extends State<SubjectDetailsScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
+
+                  // NOME
                   const Text("Nome da Avaliação",
                       style: TextStyle(
                           color: AppColors.textSecondary, fontSize: 12)),
@@ -299,8 +301,7 @@ class _SubjectDetailsScreenState extends State<SubjectDetailsScreen> {
                   ),
                   const SizedBox(height: 16),
                   
-                  // Se for Final, o peso é fixo/irrelevante na UI, mas salvamos como 10 ou 1 para constar.
-                  // A lógica de cálculo ignora o peso da final e usa média aritmética.
+                  // PESO
                   if (selectedUnit != 'Final') ...[
                     const Text("Peso (Máx total: 10.0)",
                         style: TextStyle(
@@ -328,47 +329,55 @@ class _SubjectDetailsScreenState extends State<SubjectDetailsScreen> {
                     const SizedBox(height: 16),
                   ],
 
+                  // NOTA OBTIDA
                   const Text("Nota Obtida (2 casas decimais)",
                       style: TextStyle(
-                          color: AppColors.textSecondary, fontSize: 12)),
+                        color: AppColors.textSecondary, fontSize: 12)),
                   const SizedBox(height: 8),
                   TextField(
                     controller: gradeController,
                     keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
+                      const TextInputType.numberWithOptions(decimal: true),
                     style: const TextStyle(color: Colors.white),
+                    inputFormatters: [
+                      // --- MUDANÇA 1: Removi o _MaxValueTextInputFormatter ---
+                      // Deixei apenas a permissão de números e ponto/vírgula
+                      FilteringTextInputFormatter.allow(RegExp(r'^\d*[\.,]?\d{0,2}')),
+                    ],
                     decoration: InputDecoration(
                       filled: true,
                       fillColor: _darkInput,
                       hintText: "Ex: 6.75",
                       hintStyle: const TextStyle(color: Colors.white24),
                       contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 14),
+                        horizontal: 16, vertical: 14),
                       border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: Colors.white10)),
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: Colors.white10)),
                       enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: Colors.white10)),
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: Colors.white10)),
                     ),
-                  ),
+                    ),
                   const SizedBox(height: 24),
+                  
+                  // BOTÃO SALVAR
                   SizedBox(
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton(
                       onPressed: () async {
+                        FocusScope.of(context).unfocus();
                         if (nameController.text.isNotEmpty) {
                           // Conversões
                           double finalWeight = 1.0;
                           
-                          // Se for final, peso não importa muito para a lógica nova, mas definimos 10 visualmente
                           if (selectedUnit == 'Final') {
                             finalWeight = 10.0; 
                           } else {
                              if (weightController.text.isNotEmpty) {
                               finalWeight = double.tryParse(weightController.text.replaceAll(',', '.')) ?? 1.0;
-                            }
+                             }
                           }
 
                           double finalValue = 0.0;
@@ -376,7 +385,21 @@ class _SubjectDetailsScreenState extends State<SubjectDetailsScreen> {
                             finalValue = double.tryParse(gradeController.text.replaceAll(',', '.')) ?? 0.0;
                           }
 
-                          // --- VALIDAÇÃO DE PESO MÁXIMO (Apenas U1 e U2) ---
+                          // --- MUDANÇA 2: Validação de Nota Máxima ---
+                          if (finalValue > 10.0) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  backgroundColor: Colors.red,
+                                  content: Text("Erro: A nota não pode ser maior que 10.00"),
+                                ),
+                              );
+                            }
+                            return; // Para a execução e não salva
+                          }
+                          // -------------------------------------------
+
+                          // Validação de Peso Máximo (U1 e U2)
                           if (selectedUnit != 'Final') {
                             double currentUnitWeight = _getTotalWeightForUnit(selectedUnit);
 
@@ -390,10 +413,10 @@ class _SubjectDetailsScreenState extends State<SubjectDetailsScreen> {
                                   ),
                                 );
                               }
-                              return; // Para a execução
+                              return; 
                             }
                           } else {
-                            // Validação para Final: Apenas uma nota de Final permitida
+                            // Validação para Final
                             if (_getFinalGrade() != null) {
                                if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -406,7 +429,6 @@ class _SubjectDetailsScreenState extends State<SubjectDetailsScreen> {
                               return;
                             }
                           }
-                          // --------------------------------
 
                           final newGrade = GradeModel(
                             id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -449,17 +471,19 @@ class _SubjectDetailsScreenState extends State<SubjectDetailsScreen> {
     return _subject.grades.where((g) => g.unit == _selectedFilter).toList();
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     // 1. Lista para exibir
     final displayedGrades = _getFilteredGrades();
 
     // 2. Média para exibir
     double averageToShow = 0.0;
-    
+
     // --- CORREÇÃO AQUI: Cálculo correto da Média do Semestre (separando unidades) ---
-    List<GradeModel> u1Grades = _subject.grades.where((g) => g.unit == 'Unidade 1').toList();
-    List<GradeModel> u2Grades = _subject.grades.where((g) => g.unit == 'Unidade 2').toList();
+    List<GradeModel> u1Grades =
+        _subject.grades.where((g) => g.unit == 'Unidade 1').toList();
+    List<GradeModel> u2Grades =
+        _subject.grades.where((g) => g.unit == 'Unidade 2').toList();
 
     double u1Avg = _calculateWeightedAverage(u1Grades);
     double u2Avg = _calculateWeightedAverage(u2Grades);
@@ -471,17 +495,16 @@ class _SubjectDetailsScreenState extends State<SubjectDetailsScreen> {
     if (_selectedFilter == "Geral") {
       averageToShow = _calculateGlobalAverage();
     } else if (_selectedFilter == "Final") {
-       // VERIFICAÇÃO: Já existe nota da final lançada?
+      // VERIFICAÇÃO: Já existe nota da final lançada?
       var finalGrade = _getFinalGrade();
 
       if (finalGrade != null) {
-         // CASO 1: Já tem nota. O cálculo é: (Média Semestre + Nota Final) / 2
+        // CASO 1: Já tem nota. O cálculo é: (Média Semestre + Nota Final) / 2
         averageToShow = (semesterAvg + finalGrade.value) / 2;
       } else {
-         // CASO 2: Ainda não tem nota. Mostra quanto o aluno já acumulou (Média Semestre / 2)
-        averageToShow = semesterAvg / 2; 
+        // CASO 2: Ainda não tem nota. Mostra quanto o aluno já acumulou (Média Semestre / 2)
+        averageToShow = semesterAvg / 2;
       }
-
     } else {
       // Filtra apenas as notas da unidade selecionada
       List<GradeModel> unitGrades =
@@ -489,185 +512,192 @@ class _SubjectDetailsScreenState extends State<SubjectDetailsScreen> {
       averageToShow = _calculateWeightedAverage(unitGrades);
     }
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        title: const Text("Detalhes da Disciplina",
-            style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold)),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new,
-              color: Colors.white, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [
-          IconButton(
-              icon: const Icon(Icons.edit, color: Colors.white, size: 20),
-              onPressed: _editSubject),
-          IconButton(
-              icon: const Icon(Icons.delete_outline,
-                  color: Colors.redAccent, size: 20),
-              onPressed: _deleteSubject),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(_subject.name,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.person,
-                    color: AppColors.textSecondary, size: 16),
-                const SizedBox(width: 4),
-                Text(_subject.professor,
-                    style: const TextStyle(color: AppColors.textSecondary)),
-              ],
-            ),
-
-            const SizedBox(height: 24),
-            _buildAttendanceCard(),
-            const SizedBox(height: 32),
-
-            const Text("Avaliações",
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-
-            // CARD DE MÉDIA
-            _buildSummaryCard(averageToShow, _selectedFilter),
-
-            const SizedBox(height: 20),
-
-            // FILTROS
-            Container(
-              height: 40,
-              decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(20)),
-              child: Row(
-                children: [
-                  _buildFilterTab("Geral"),
-                  _buildFilterTab("Unidade 1"),
-                  _buildFilterTab("Unidade 2"),
-                  // Só mostra a aba Final se ela existir ou for necessária
-                  if (_shouldShowFinal() || _getFinalGrade() != null) _buildFilterTab("Final"),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // LISTA
-            if (displayedGrades.isEmpty)
-              _buildEmptyGradeState()
-            else
-              Column(
-                children: displayedGrades.map((grade) {
-                  return Dismissible(
-                    key: Key(grade.id),
-                    direction: DismissDirection.endToStart,
-                    background: Container(
-                      alignment: Alignment.centerRight,
-                      padding: const EdgeInsets.only(right: 20),
-                      color: Colors.red.withOpacity(0.8),
-                      child: const Icon(Icons.delete, color: Colors.white),
-                    ),
-                    onDismissed: (_) async {
-                      var box = Hive.box<SubjectModel>('subjects');
-                      _subject.grades.remove(grade);
-                      await box.put(_subject.id, _subject);
-                      setState(() {});
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _buildAssessmentItem(grade),
-                    ),
-                  );
-                }).toList(),
-              ),
-
-            const SizedBox(height: 12),
-
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton.icon(
-                onPressed: _showAddGradeDialog,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white.withOpacity(0.05),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(
-                          color: _greenColor.withOpacity(0.5))),
-                ),
-                icon: Icon(Icons.add, color: _greenColor),
-                label: Text("Adicionar Nova Avaliação",
-                    style: TextStyle(
-                        color: _greenColor, fontWeight: FontWeight.bold)),
-              ),
-            ),
-
-            const SizedBox(height: 32),
-
-            // ANOTAÇÕES
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text("Anotações",
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold)),
-                IconButton(
-                  onPressed: _saveNote,
-                  icon: _isSavingNote
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.check_circle,
-                          color: AppColors.primary, size: 24),
-                )
-              ],
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(16)),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: _noteController,
-                    maxLines: null,
-                    style: const TextStyle(
-                        color: AppColors.textSecondary, height: 1.5),
-                    decoration: const InputDecoration(
-                      hintText: "Digite suas anotações aqui...",
-                      hintStyle: TextStyle(color: Colors.grey),
-                      border: InputBorder.none,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 40),
+    // ALTERAÇÃO AQUI: Envolvi o Scaffold com GestureDetector para fechar o teclado
+    return GestureDetector(
+      onTap: () {
+        // Remove o foco de qualquer campo de texto (fecha o teclado)
+        FocusScope.of(context).unfocus();
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          centerTitle: true,
+          title: const Text("Detalhes da Disciplina",
+              style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold)),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new,
+                color: Colors.white, size: 20),
+            onPressed: () => Navigator.pop(context),
+          ),
+          actions: [
+            IconButton(
+                icon: const Icon(Icons.edit, color: Colors.white, size: 20),
+                onPressed: _editSubject),
+            IconButton(
+                icon: const Icon(Icons.delete_outline,
+                    color: Colors.redAccent, size: 20),
+                onPressed: _deleteSubject),
           ],
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(_subject.name,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Icon(Icons.person,
+                      color: AppColors.textSecondary, size: 16),
+                  const SizedBox(width: 4),
+                  Text(_subject.professor,
+                      style: const TextStyle(color: AppColors.textSecondary)),
+                ],
+              ),
+      
+              const SizedBox(height: 24),
+              _buildAttendanceCard(),
+              const SizedBox(height: 32),
+      
+              const Text("Avaliações",
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+      
+              // CARD DE MÉDIA
+              _buildSummaryCard(averageToShow, _selectedFilter),
+      
+              const SizedBox(height: 20),
+      
+              // FILTROS
+              Container(
+                height: 40,
+                decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(20)),
+                child: Row(
+                  children: [
+                    _buildFilterTab("Geral"),
+                    _buildFilterTab("Unidade 1"),
+                    _buildFilterTab("Unidade 2"),
+                    // Só mostra a aba Final se ela existir ou for necessária
+                    if (_shouldShowFinal() || _getFinalGrade() != null)
+                      _buildFilterTab("Final"),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+      
+              // LISTA
+              if (displayedGrades.isEmpty)
+                _buildEmptyGradeState()
+              else
+                Column(
+                  children: displayedGrades.map((grade) {
+                    return Dismissible(
+                      key: Key(grade.id),
+                      direction: DismissDirection.endToStart,
+                      background: Container(
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.only(right: 20),
+                        color: Colors.red.withOpacity(0.8),
+                        child: const Icon(Icons.delete, color: Colors.white),
+                      ),
+                      onDismissed: (_) async {
+                        var box = Hive.box<SubjectModel>('subjects');
+                        _subject.grades.remove(grade);
+                        await box.put(_subject.id, _subject);
+                        setState(() {});
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _buildAssessmentItem(grade),
+                      ),
+                    );
+                  }).toList(),
+                ),
+      
+              const SizedBox(height: 12),
+      
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  onPressed: _showAddGradeDialog,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white.withOpacity(0.05),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: _greenColor.withOpacity(0.5))),
+                  ),
+                  icon: Icon(Icons.add, color: _greenColor),
+                  label: Text("Adicionar Nova Avaliação",
+                      style: TextStyle(
+                          color: _greenColor, fontWeight: FontWeight.bold)),
+                ),
+              ),
+      
+              const SizedBox(height: 32),
+      
+              // ANOTAÇÕES
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("Anotações",
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold)),
+                  IconButton(
+                    onPressed: _saveNote,
+                    icon: _isSavingNote
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.check_circle,
+                            color: AppColors.primary, size: 24),
+                  )
+                ],
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(16)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: _noteController,
+                      maxLines: null,
+                      style: const TextStyle(
+                          color: AppColors.textSecondary, height: 1.5),
+                      decoration: const InputDecoration(
+                        hintText: "Digite suas anotações aqui...",
+                        hintStyle: TextStyle(color: Colors.grey),
+                        border: InputBorder.none,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 40),
+            ],
+          ),
         ),
       ),
     );
@@ -967,12 +997,33 @@ class _SubjectDetailsScreenState extends State<SubjectDetailsScreen> {
     );
   }
 
-  Widget _buildAttendanceCard() {
+Widget _buildAttendanceCard() {
     double progress = _faltas / _subject.maxFaults;
     if (progress > 1.0) progress = 1.0;
-    bool isCritical = _faltas >= _subject.maxFaults;
-    Color statusColor = isCritical ? const Color(0xFFFF5252) : AppColors.primary;
-    String statusText = isCritical ? "CRÍTICO" : "EM DIA";
+
+    // --- LÓGICA DE CORES E STATUS (ATUALIZADA) ---
+    Color statusColor;
+    String statusText;
+
+    if (_faltas >= 16) {
+      // Reprovado (>= 16)
+      statusColor = const Color(0xFF757575); // Cinza Chumbo (Ajustado para ser visível no tema escuro)
+      // Obs: Se quiser o #333333 exato, use Color(0xFF333333), mas pode ficar invisível no fundo escuro.
+      statusText = "REPROVADO";
+    } else if (_faltas >= 13) {
+      // Crítico (13 a 15)
+      statusColor = const Color(0xFFFF5252); // Vermelho
+      statusText = "CRÍTICO";
+    } else if (_faltas >= 8) {
+      // Atenção (8 a 12)
+      statusColor = const Color(0xFFFFC107); // Amarelo (Amber fica melhor em fundo escuro)
+      statusText = "ATENÇÃO";
+    } else {
+      // Em Dia (< 8)
+      statusColor = _greenColor; // Ou AppColors.primary, dependendo da sua preferência
+      statusText = "EM DIA";
+    }
+    // ---------------------------------------------
 
     return Container(
       padding: const EdgeInsets.all(20),
