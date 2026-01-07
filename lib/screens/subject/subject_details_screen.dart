@@ -997,12 +997,33 @@ class _SubjectDetailsScreenState extends State<SubjectDetailsScreen> {
     );
   }
 
-  Widget _buildAttendanceCard() {
+Widget _buildAttendanceCard() {
     double progress = _faltas / _subject.maxFaults;
     if (progress > 1.0) progress = 1.0;
-    bool isCritical = _faltas >= _subject.maxFaults;
-    Color statusColor = isCritical ? const Color(0xFFFF5252) : AppColors.primary;
-    String statusText = isCritical ? "CRÍTICO" : "EM DIA";
+
+    // --- LÓGICA DE CORES E STATUS (ATUALIZADA) ---
+    Color statusColor;
+    String statusText;
+
+    if (_faltas >= 16) {
+      // Reprovado (>= 16)
+      statusColor = const Color(0xFF757575); // Cinza Chumbo (Ajustado para ser visível no tema escuro)
+      // Obs: Se quiser o #333333 exato, use Color(0xFF333333), mas pode ficar invisível no fundo escuro.
+      statusText = "REPROVADO";
+    } else if (_faltas >= 13) {
+      // Crítico (13 a 15)
+      statusColor = const Color(0xFFFF5252); // Vermelho
+      statusText = "CRÍTICO";
+    } else if (_faltas >= 8) {
+      // Atenção (8 a 12)
+      statusColor = const Color(0xFFFFC107); // Amarelo (Amber fica melhor em fundo escuro)
+      statusText = "ATENÇÃO";
+    } else {
+      // Em Dia (< 8)
+      statusColor = _greenColor; // Ou AppColors.primary, dependendo da sua preferência
+      statusText = "EM DIA";
+    }
+    // ---------------------------------------------
 
     return Container(
       padding: const EdgeInsets.all(20),

@@ -274,7 +274,8 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
 // --- CARD DE STATUS INTELIGENTE ---
   Widget _buildStatusCard(List<SubjectModel> subjects) {
     // 1. CÁLCULO DAS FALTAS CRÍTICAS
-    int criticalFaults = subjects.where((s) => s.faults >= s.maxFaults).length;
+    // Alterado: Agora conta como crítica se tiver 13 ou mais faltas
+    int criticalFaults = subjects.where((s) => s.faults >= 13).length;
 
     // 2. CÁLCULO DA MÉDIA GERAL DO SEMESTRE
     double totalAverage = 0;
@@ -283,6 +284,8 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
     for (var subject in subjects) {
       if (subject.grades.isNotEmpty) {
         // Calcula a média dessa matéria
+        // Nota: Assumindo que a lógica de cálculo de média está correta nos seus models
+        // Se precisar de média ponderada, idealmente essa lógica estaria dentro do SubjectModel
         double subjectAvg = subject.grades.map((g) => g.value).reduce((a, b) => a + b) / subject.grades.length;
         totalAverage += subjectAvg;
         subjectsWithGrades++;
@@ -345,6 +348,7 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
                   Text(
                     "$criticalFaults",
                     style: TextStyle(
+                      // Fica vermelho se houver qualquer matéria com >= 13 faltas
                       color: criticalFaults > 0 ? const Color(0xFFFF5252) : AppColors.primary, 
                       fontSize: 36,
                       fontWeight: FontWeight.bold,
@@ -369,16 +373,22 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
     );
   }
 
-  // --- Widget do Item da Matéria ---
+// --- Widget do Item da Matéria ---
   Widget _buildSubjectItem(BuildContext context, {required SubjectModel subject}) {
+    
+    // --- LÓGICA DE CORES DA BOLINHA (Atualizada) ---
     Color statusColor;
-    if (subject.faults == 0) {
-      statusColor = AppColors.primary;
-    } else if (subject.faults >= subject.maxFaults) {
-      statusColor = const Color(0xFFFF5252); // Crítico
+
+    if (subject.faults >= 16) {
+      statusColor = const Color(0xFF757575); // Reprovado (Cinza Chumbo)
+    } else if (subject.faults >= 13) {
+      statusColor = const Color(0xFFFF5252); // Crítico (Vermelho)
+    } else if (subject.faults >= 8) {
+      statusColor = const Color(0xFFFFC107); // Atenção (Amarelo)
     } else {
-      statusColor = Colors.amber; // Atenção
+      statusColor = AppColors.primary;       // Em dia (Verde)
     }
+    // ------------------------------------------------
 
     final subjectColor = Color(subject.colorValue);
 
