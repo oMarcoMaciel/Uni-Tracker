@@ -5,12 +5,12 @@ import '../../models/subject_model.dart';
 
 class AddSubjectScreen extends StatefulWidget {
   final String periodId;
-  final SubjectModel? subjectToEdit; // <--- Novo: Aceita uma matéria para editar
+  final SubjectModel? subjectToEdit;
 
   const AddSubjectScreen({
     super.key,
     required this.periodId,
-    this.subjectToEdit, // Se for nulo = Criação. Se tiver dados = Edição.
+    this.subjectToEdit,
   });
 
   @override
@@ -36,7 +36,6 @@ class _AddSubjectScreenState extends State<AddSubjectScreen> {
   @override
   void initState() {
     super.initState();
-    // SE FOR MODO EDIÇÃO, PREENCHE OS CAMPOS
     if (widget.subjectToEdit != null) {
       _nameController.text = widget.subjectToEdit!.name;
       _professorController.text = widget.subjectToEdit!.professor;
@@ -45,7 +44,6 @@ class _AddSubjectScreenState extends State<AddSubjectScreen> {
     }
   }
 
-  // --- FUNÇÃO PARA SALVAR (CRIAR OU ATUALIZAR) ---
   Future<void> _saveSubject() async {
     // 1. Validação básica
     if (_nameController.text.isEmpty) {
@@ -63,17 +61,16 @@ class _AddSubjectScreenState extends State<AddSubjectScreen> {
 
     if (widget.subjectToEdit != null) {
       // --- CASO 1: EDITAR ---
-      // Criamos um novo objeto com os dados novos, mas MANTENDO o ID e dados históricos (notas/faltas)
       final updatedSubject = SubjectModel(
-        id: widget.subjectToEdit!.id, // IMPORTANTE: Mesmo ID
+        id: widget.subjectToEdit!.id,
         periodId: widget.periodId,
         name: _nameController.text,
         professor: _professorController.text.isNotEmpty ? _professorController.text : "Não informado",
-        faults: widget.subjectToEdit!.faults, // Mantém faltas atuais
+        faults: widget.subjectToEdit!.faults,
         maxFaults: _limitFaltas,
         colorValue: _selectedColor.value,
-        note: widget.subjectToEdit!.note, // Mantém a anotação antiga
-        grades: widget.subjectToEdit!.grades, // Mantém as notas antigas
+        note: widget.subjectToEdit!.note,
+        grades: widget.subjectToEdit!.grades,
       );
 
       await box.put(updatedSubject.id, updatedSubject);
@@ -96,143 +93,148 @@ class _AddSubjectScreenState extends State<AddSubjectScreen> {
 
     // 6. Fechar a tela
     if (mounted) {
-      Navigator.pop(context, true); // Retorna true para atualizar a tela anterior
+      Navigator.pop(context, true);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Verifica se é edição para mudar o título
     final isEditing = widget.subjectToEdit != null;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          isEditing ? "Editar Disciplina" : "Adicionar Disciplina", // Título Dinâmico
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true,
-        actions: [
-          TextButton(
-            onPressed: _saveSubject,
-            child: const Text(
-              "Salvar",
-              style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
-            ),
-          )
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("INFORMAÇÕES BÁSICAS", style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-            
-            _buildLabel("Nome da Matéria"),
-            _buildInput(controller: _nameController, hint: "Ex: Cálculo I", icon: Icons.menu_book),
-            
-            const SizedBox(height: 16),
-            
-            _buildLabel("Nome do Professor"),
-            _buildInput(controller: _professorController, hint: "Ex: Dr. Silva", icon: Icons.person),
-            
-            const SizedBox(height: 32),
-            const Divider(color: Colors.white10),
-            const SizedBox(height: 32),
-
-            const Text("DETALHES ACADÊMICOS", style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-
-            _buildLabel("Limite de Faltas"),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(12),
+    // ALTERAÇÃO AQUI: GestureDetector para fechar teclado ao clicar fora
+    return GestureDetector(
+      onTap: () {
+        FocusScope.of(context).unfocus();
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.close, color: Colors.white),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: Text(
+            isEditing ? "Editar Disciplina" : "Adicionar Disciplina",
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          centerTitle: true,
+          actions: [
+            TextButton(
+              onPressed: _saveSubject,
+              child: const Text(
+                "Salvar",
+                style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _buildCounterButton(icon: Icons.remove, onTap: () {
-                    if (_limitFaltas > 0) setState(() => _limitFaltas--);
-                  }),
-                  Text(
-                    "$_limitFaltas",
-                    style: const TextStyle(color: AppColors.primary, fontSize: 24, fontWeight: FontWeight.bold),
-                  ),
-                  _buildCounterButton(icon: Icons.add, onTap: () {
-                    setState(() => _limitFaltas++);
-                  }),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 32),
-            const Divider(color: Colors.white10),
-            const SizedBox(height: 32),
-
-            const Text("PERSONALIZAÇÃO", style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-
-            _buildLabel("Cor da Etiqueta"),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: _colors.map((color) {
-                final isSelected = _selectedColor == color;
-                return GestureDetector(
-                  onTap: () => setState(() => _selectedColor = color),
-                  child: Container(
-                    width: 45,
-                    height: 45,
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
-                      border: isSelected ? Border.all(color: Colors.white, width: 3) : null,
-                      boxShadow: isSelected ? [
-                        BoxShadow(color: color.withOpacity(0.5), blurRadius: 10, spreadRadius: 1)
-                      ] : [],
-                    ),
-                    child: isSelected ? const Icon(Icons.check, color: Colors.white, size: 20) : null,
-                  ),
-                );
-              }).toList(),
-            ),
-
-            const SizedBox(height: 40),
-
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton.icon(
-                onPressed: _saveSubject,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.black, 
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  elevation: 5,
-                  shadowColor: AppColors.primary.withOpacity(0.5),
-                ),
-                icon: const Icon(Icons.save_outlined),
-                label: const Text("Salvar Disciplina", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              ),
-            ),
-            const SizedBox(height: 20),
-             Center(
-               child: TextButton(
-                 onPressed: () => Navigator.pop(context),
-                 child: const Text("Cancelar", style: TextStyle(color: AppColors.textSecondary)),
-               ),
-             )
+            )
           ],
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("INFORMAÇÕES BÁSICAS", style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              
+              _buildLabel("Nome da Matéria"),
+              _buildInput(controller: _nameController, hint: "Ex: Cálculo I", icon: Icons.menu_book),
+              
+              const SizedBox(height: 16),
+              
+              _buildLabel("Nome do Professor"),
+              _buildInput(controller: _professorController, hint: "Ex: Dr. Silva", icon: Icons.person),
+              
+              const SizedBox(height: 32),
+              const Divider(color: Colors.white10),
+              const SizedBox(height: 32),
+      
+              const Text("DETALHES ACADÊMICOS", style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+      
+              _buildLabel("Limite de Faltas"),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildCounterButton(icon: Icons.remove, onTap: () {
+                      if (_limitFaltas > 0) setState(() => _limitFaltas--);
+                    }),
+                    Text(
+                      "$_limitFaltas",
+                      style: const TextStyle(color: AppColors.primary, fontSize: 24, fontWeight: FontWeight.bold),
+                    ),
+                    _buildCounterButton(icon: Icons.add, onTap: () {
+                      setState(() => _limitFaltas++);
+                    }),
+                  ],
+                ),
+              ),
+      
+              const SizedBox(height: 32),
+              const Divider(color: Colors.white10),
+              const SizedBox(height: 32),
+      
+              const Text("PERSONALIZAÇÃO", style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+      
+              _buildLabel("Cor da Etiqueta"),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: _colors.map((color) {
+                  final isSelected = _selectedColor == color;
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedColor = color),
+                    child: Container(
+                      width: 45,
+                      height: 45,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                        border: isSelected ? Border.all(color: Colors.white, width: 3) : null,
+                        boxShadow: isSelected ? [
+                          BoxShadow(color: color.withOpacity(0.5), blurRadius: 10, spreadRadius: 1)
+                        ] : [],
+                      ),
+                      child: isSelected ? const Icon(Icons.check, color: Colors.white, size: 20) : null,
+                    ),
+                  );
+                }).toList(),
+              ),
+      
+              const SizedBox(height: 40),
+      
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton.icon(
+                  onPressed: _saveSubject,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.black, 
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    elevation: 5,
+                    shadowColor: AppColors.primary.withOpacity(0.5),
+                  ),
+                  icon: const Icon(Icons.save_outlined),
+                  label: const Text("Salvar Disciplina", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(height: 20),
+                Center(
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text("Cancelar", style: TextStyle(color: AppColors.textSecondary)),
+                  ),
+                )
+            ],
+          ),
         ),
       ),
     );
