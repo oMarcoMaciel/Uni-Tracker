@@ -19,7 +19,7 @@ import 'providers/academic_provider.dart';
 // --- CONFIGURAÇÃO DE DESENVOLVIMENTO ---
 // Mude para TRUE se quiser pular o cadastro durante os testes.
 // Mude para FALSE para testar como um usuário novo veria.
-const bool DEV_SKIP_ONBOARDING = false; 
+const bool DEV_SKIP_ONBOARDING = true; 
 // ----------------------------------------
 
 void main() async {
