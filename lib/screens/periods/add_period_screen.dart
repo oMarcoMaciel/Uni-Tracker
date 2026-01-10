@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:characters/characters.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/period_model.dart';
 
@@ -13,10 +15,12 @@ class AddPeriodScreen extends StatefulWidget {
 }
 
 class _AddPeriodScreenState extends State<AddPeriodScreen> {
+  static const int _periodNameMaxChars = 11;
+
   final _nameController = TextEditingController();
   // 1. ADICIONADO: Um nó de foco para controlar o campo manualmente
   final _nameFocusNode = FocusNode();
-  
+
   bool _isCurrentPeriod = false;
   DateTime? _startDate;
   DateTime? _endDate;
@@ -42,8 +46,18 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
 
   String _formatDate(DateTime date) {
     List<String> months = [
-      'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
-      'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'
+      'Jan',
+      'Fev',
+      'Mar',
+      'Abr',
+      'Mai',
+      'Jun',
+      'Jul',
+      'Ago',
+      'Set',
+      'Out',
+      'Nov',
+      'Dez',
     ];
     return "${date.day} ${months[date.month - 1]} ${date.year}";
   }
@@ -51,7 +65,7 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
   Future<void> _selectDate(bool isStart) async {
     // 3. ALTERADO: Remove o foco explicitamente
     _nameFocusNode.unfocus();
-    
+
     // TRUQUE: Espera 100ms para o teclado baixar totalmente antes de abrir o modal.
     // Isso impede que o Flutter "lembre" que o teclado estava aberto.
     await Future.delayed(const Duration(milliseconds: 100));
@@ -80,7 +94,7 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
         );
       },
     );
-    
+
     if (picked != null) {
       setState(() {
         if (isStart) {
@@ -93,14 +107,28 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
   }
 
   Future<void> _savePeriod() async {
-    if (_nameController.text.isEmpty) {
+    final periodName = _nameController.text.trim();
+
+    if (periodName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Por favor, digite um nome.')));
+        const SnackBar(content: Text('Por favor, digite um nome.')),
+      );
       return;
     }
+
+    if (periodName.characters.length > _periodNameMaxChars) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('O nome do período deve ter no máximo 11 caracteres.'),
+        ),
+      );
+      return;
+    }
+
     if (_startDate == null || _endDate == null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Selecione as datas.')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Selecione as datas.')));
       return;
     }
 
@@ -125,7 +153,7 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
     if (widget.periodToEdit != null) {
       final updatedPeriod = PeriodModel(
         id: widget.periodToEdit!.id,
-        name: _nameController.text,
+        name: periodName,
         startDate: _startDate!,
         endDate: _endDate!,
         subjects: widget.periodToEdit!.subjects,
@@ -136,7 +164,7 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
       final String uniqueId = DateTime.now().millisecondsSinceEpoch.toString();
       final newPeriod = PeriodModel(
         id: uniqueId,
-        name: _nameController.text,
+        name: periodName,
         startDate: _startDate!,
         endDate: _endDate!,
         subjects: [],
@@ -163,20 +191,30 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
           leadingWidth: 100,
           leading: TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Cancelar",
-                style: TextStyle(color: AppColors.textSecondary)),
+            child: const Text(
+              "Cancelar",
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
           ),
-          title: Text(isEditing ? "Editar Período" : "Novo Período",
-              style: const TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.bold)),
+          title: Text(
+            isEditing ? "Editar Período" : "Novo Período",
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           centerTitle: true,
           actions: [
             TextButton(
               onPressed: _savePeriod,
-              child: const Text("Salvar",
-                  style: TextStyle(
-                      color: AppColors.primary, fontWeight: FontWeight.bold)),
-            )
+              child: const Text(
+                "Salvar",
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
           ],
         ),
         body: Column(
@@ -190,49 +228,68 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
                     _buildLabel("Nome do Período"),
                     Container(
                       decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(16)),
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                       child: TextField(
                         controller: _nameController,
                         focusNode: _nameFocusNode, // 4. VINCULADO AQUI
+                        inputFormatters: [
+                          LengthLimitingTextInputFormatter(_periodNameMaxChars),
+                        ],
                         style: const TextStyle(color: Colors.white),
                         decoration: InputDecoration(
                           hintText: "Ex: 2024.1, Semestre 1",
                           hintStyle: TextStyle(color: Colors.grey[600]),
-                          suffixIcon: Icon(Icons.edit,
-                              color: Colors.grey[600], size: 20),
+                          suffixIcon: Icon(
+                            Icons.edit,
+                            color: Colors.grey[600],
+                            size: 20,
+                          ),
                           border: InputBorder.none,
                           contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 20),
+                            horizontal: 20,
+                            vertical: 20,
+                          ),
                         ),
                       ),
                     ),
                     const Padding(
-                        padding: EdgeInsets.only(top: 8, left: 4),
-                        child: Text(
-                            "Utilize um nome curto para fácil identificação.",
-                            style: TextStyle(
-                                color: AppColors.textSecondary, fontSize: 12))),
+                      padding: EdgeInsets.only(top: 8, left: 4),
+                      child: Text(
+                        "Utilize um nome curto para fácil identificação (ex: 2026.1).",
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 32),
                     _buildLabel("Duração"),
                     Container(
                       decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(16)),
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                       child: Column(
                         children: [
                           _buildDateItem(
-                              title: "Data de Início",
-                              icon: Icons.calendar_today,
-                              date: _startDate,
-                              onTap: () => _selectDate(true)),
+                            title: "Data de Início",
+                            icon: Icons.calendar_today,
+                            date: _startDate,
+                            onTap: () => _selectDate(true),
+                          ),
                           const Divider(
-                              height: 1, color: Colors.white10, indent: 56),
+                            height: 1,
+                            color: Colors.white10,
+                            indent: 56,
+                          ),
                           _buildDateItem(
-                              title: "Data de Fim",
-                              icon: Icons.event,
-                              date: _endDate,
-                              onTap: () => _selectDate(false)),
+                            title: "Data de Fim",
+                            icon: Icons.event,
+                            date: _endDate,
+                            onTap: () => _selectDate(false),
+                          ),
                         ],
                       ),
                     ),
@@ -240,26 +297,40 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
                     _buildLabel("Preferências"),
                     Container(
                       decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(16)),
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                       child: ListTile(
                         contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
                         leading: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.1),
-                              shape: BoxShape.circle),
-                          child: const Icon(Icons.verified,
-                              color: AppColors.textSecondary, size: 20),
+                            color: Colors.white.withOpacity(0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.verified,
+                            color: AppColors.textSecondary,
+                            size: 20,
+                          ),
                         ),
-                        title: const Text("Período Atual",
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold)),
-                        subtitle: const Text("Definir como semestre ativo",
-                            style: TextStyle(
-                                color: AppColors.textSecondary, fontSize: 12)),
+                        title: const Text(
+                          "Período Atual",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        subtitle: const Text(
+                          "Definir como semestre ativo",
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
                         trailing: Switch(
                           value: _isCurrentPeriod,
                           activeColor: AppColors.primary,
@@ -286,16 +357,18 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.black,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                     elevation: 0,
                   ),
                   icon: const Icon(Icons.save_outlined),
-                  label: const Text("Salvar Período",
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  label: const Text(
+                    "Salvar Período",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
-            )
+            ),
           ],
         ),
       ),
@@ -305,19 +378,23 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
   Widget _buildLabel(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Text(text,
-          style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 14,
-              fontWeight: FontWeight.bold)),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: AppColors.textSecondary,
+          fontSize: 14,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
     );
   }
 
-  Widget _buildDateItem(
-      {required String title,
-      required IconData icon,
-      DateTime? date,
-      required VoidCallback onTap}) {
+  Widget _buildDateItem({
+    required String title,
+    required IconData icon,
+    DateTime? date,
+    required VoidCallback onTap,
+  }) {
     return InkWell(
       onTap: onTap,
       child: Padding(
@@ -327,38 +404,55 @@ class _AddPeriodScreenState extends State<AddPeriodScreen> {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(12)),
+                color: Colors.white.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: Icon(icon, color: AppColors.primary, size: 20),
             ),
             const SizedBox(width: 16),
             Expanded(
-                child: Text(title,
-                    style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.w500))),
+              child: Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
             if (date != null)
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8)),
-                child: Text(_formatDate(date),
-                    style: const TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12)),
+                  color: AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  _formatDate(date),
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
               )
             else
               Row(
                 children: const [
-                  Text("Selecionar",
-                      style: TextStyle(color: AppColors.textSecondary)),
+                  Text(
+                    "Selecionar",
+                    style: TextStyle(color: AppColors.textSecondary),
+                  ),
                   SizedBox(width: 8),
-                  Icon(Icons.chevron_right,
-                      color: AppColors.textSecondary, size: 16),
+                  Icon(
+                    Icons.chevron_right,
+                    color: AppColors.textSecondary,
+                    size: 16,
+                  ),
                 ],
-              )
+              ),
           ],
         ),
       ),

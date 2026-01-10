@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart'; // <--- Importante para ouvir o banco
+import '../../core/constants/text_formatters.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/period_model.dart';
 import '../../models/subject_model.dart'; // <--- Import do modelo de matérias
@@ -10,10 +11,7 @@ import 'add_period_screen.dart'; // Import para edição de período
 class PeriodDetailsScreen extends StatefulWidget {
   final PeriodModel period;
 
-  const PeriodDetailsScreen({
-    super.key,
-    required this.period,
-  });
+  const PeriodDetailsScreen({super.key, required this.period});
 
   @override
   State<PeriodDetailsScreen> createState() => _PeriodDetailsScreenState();
@@ -35,7 +33,10 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.surface,
-        title: const Text("Excluir Período?", style: TextStyle(color: Colors.white)),
+        title: const Text(
+          "Excluir Período?",
+          style: TextStyle(color: Colors.white),
+        ),
         content: const Text(
           "Isso apagará o período e todas as suas disciplinas e notas.\nEssa ação não pode ser desfeita.",
           style: TextStyle(color: Colors.white70),
@@ -47,7 +48,10 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text("Excluir Tudo", style: TextStyle(color: Colors.red)),
+            child: const Text(
+              "Excluir Tudo",
+              style: TextStyle(color: Colors.red),
+            ),
           ),
         ],
       ),
@@ -56,7 +60,9 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
     if (confirm == true) {
       // 1. Deletar Disciplinas associadas
       var subjectsBox = Hive.box<SubjectModel>('subjects');
-      final subjectsToDelete = subjectsBox.values.where((s) => s.periodId == _period.id).toList();
+      final subjectsToDelete = subjectsBox.values
+          .where((s) => s.periodId == _period.id)
+          .toList();
       for (var subject in subjectsToDelete) {
         await subjectsBox.delete(subject.id);
       }
@@ -105,7 +111,11 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
           ),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            color: Colors.white,
+            size: 20,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
@@ -114,7 +124,11 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
             onPressed: _editPeriod,
           ),
           IconButton(
-            icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+            icon: const Icon(
+              Icons.delete_outline,
+              color: Colors.redAccent,
+              size: 20,
+            ),
             onPressed: _deletePeriod,
           ),
         ],
@@ -125,7 +139,6 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
           ValueListenableBuilder(
             valueListenable: Hive.box<SubjectModel>('subjects').listenable(),
             builder: (context, Box<SubjectModel> box, _) {
-              
               // 1. Filtrar apenas as matérias deste período
               final subjects = box.values
                   .where((subject) => subject.periodId == _period.id)
@@ -138,7 +151,12 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
                   children: [
                     // Título e Subtítulo
                     Text(
-                      _period.name, // Usa a variável local _period
+                      limitCharacters(
+                        _period.name,
+                        42,
+                      ), // Usa a variável local _period
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 28,
@@ -148,13 +166,16 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
                     const SizedBox(height: 8),
                     Text(
                       "Ano Letivo ${_period.startDate.year}",
-                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 14,
+                      ),
                     ),
 
                     const SizedBox(height: 24),
 
                     // Card de Status
-                    _buildStatusCard(subjects), 
+                    _buildStatusCard(subjects),
 
                     const SizedBox(height: 32),
 
@@ -171,7 +192,10 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.green.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(8),
@@ -200,12 +224,13 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
                             padding: const EdgeInsets.only(bottom: 12),
                             child: _buildSubjectItem(
                               context,
-                              subject: subject, // Passamos o objeto inteiro agora
+                              subject:
+                                  subject, // Passamos o objeto inteiro agora
                             ),
                           );
                         }).toList(),
                       ),
-                      
+
                     const SizedBox(height: 20),
                   ],
                 ),
@@ -226,9 +251,8 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => AddSubjectScreen(
-                        periodId: _period.id,
-                      ),
+                      builder: (context) =>
+                          AddSubjectScreen(periodId: _period.id),
                     ),
                   );
                 },
@@ -260,7 +284,11 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
       child: Column(
         children: [
           const SizedBox(height: 40),
-          Icon(Icons.library_books_outlined, size: 60, color: Colors.white.withOpacity(0.2)),
+          Icon(
+            Icons.library_books_outlined,
+            size: 60,
+            color: Colors.white.withOpacity(0.2),
+          ),
           const SizedBox(height: 16),
           Text(
             "Nenhuma disciplina ainda",
@@ -271,7 +299,7 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
     );
   }
 
-// --- CARD DE STATUS INTELIGENTE ---
+  // --- CARD DE STATUS INTELIGENTE ---
   Widget _buildStatusCard(List<SubjectModel> subjects) {
     // 1. CÁLCULO DAS FALTAS CRÍTICAS
     // Alterado: Agora conta como crítica se tiver 13 ou mais faltas
@@ -286,14 +314,18 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
         // Calcula a média dessa matéria
         // Nota: Assumindo que a lógica de cálculo de média está correta nos seus models
         // Se precisar de média ponderada, idealmente essa lógica estaria dentro do SubjectModel
-        double subjectAvg = subject.grades.map((g) => g.value).reduce((a, b) => a + b) / subject.grades.length;
+        double subjectAvg =
+            subject.grades.map((g) => g.value).reduce((a, b) => a + b) /
+            subject.grades.length;
         totalAverage += subjectAvg;
         subjectsWithGrades++;
       }
     }
 
     // Se tiver pelo menos uma matéria com nota, faz a média geral. Senão, é 0.
-    double semesterAverage = subjectsWithGrades > 0 ? totalAverage / subjectsWithGrades : 0.0;
+    double semesterAverage = subjectsWithGrades > 0
+        ? totalAverage / subjectsWithGrades
+        : 0.0;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -307,11 +339,18 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
         children: [
           Row(
             children: const [
-              Icon(Icons.analytics_outlined, color: AppColors.primary, size: 20),
+              Icon(
+                Icons.analytics_outlined,
+                color: AppColors.primary,
+                size: 20,
+              ),
               SizedBox(width: 8),
               Text(
                 "Resumo do Semestre",
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),
@@ -325,7 +364,9 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    semesterAverage == 0 ? "--" : semesterAverage.toStringAsFixed(1),
+                    semesterAverage == 0
+                        ? "--"
+                        : semesterAverage.toStringAsFixed(1),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 36,
@@ -336,11 +377,14 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
                   const SizedBox(height: 4),
                   const Text(
                     "Média Geral",
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),
-              
+
               // Lado Direito: Matérias em Risco
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -349,7 +393,9 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
                     "$criticalFaults",
                     style: TextStyle(
                       // Fica vermelho se houver qualquer matéria com >= 13 faltas
-                      color: criticalFaults > 0 ? const Color(0xFFFF5252) : AppColors.primary, 
+                      color: criticalFaults > 0
+                          ? const Color(0xFFFF5252)
+                          : AppColors.primary,
                       fontSize: 36,
                       fontWeight: FontWeight.bold,
                       height: 1.0,
@@ -360,7 +406,10 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
                     children: const [
                       Text(
                         "Matérias Críticas",
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                        ),
                       ),
                     ],
                   ),
@@ -373,9 +422,11 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
     );
   }
 
-// --- Widget do Item da Matéria ---
-  Widget _buildSubjectItem(BuildContext context, {required SubjectModel subject}) {
-    
+  // --- Widget do Item da Matéria ---
+  Widget _buildSubjectItem(
+    BuildContext context, {
+    required SubjectModel subject,
+  }) {
     // --- LÓGICA DE CORES DA BOLINHA (Atualizada) ---
     Color statusColor;
 
@@ -386,7 +437,7 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
     } else if (subject.faults >= 8) {
       statusColor = const Color(0xFFFFC107); // Atenção (Amarelo)
     } else {
-      statusColor = AppColors.primary;       // Em dia (Verde)
+      statusColor = AppColors.primary; // Em dia (Verde)
     }
     // ------------------------------------------------
 
@@ -396,7 +447,9 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => SubjectDetailsScreen(subject: subject)),
+          MaterialPageRoute(
+            builder: (context) => SubjectDetailsScreen(subject: subject),
+          ),
         );
       },
       child: Container(
@@ -432,7 +485,10 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
                   const SizedBox(height: 4),
                   Text(
                     subject.professor,
-                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),
