@@ -52,29 +52,48 @@ class _HomeScreenState extends State<HomeScreen> {
       const ProfileScreen(),
     ];
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: screens[_selectedIndex],
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: Colors.white10, width: 1)),
-        ),
-        child: BottomNavigationBar(
-          backgroundColor: AppColors.background,
-          elevation: 0,
-          type: BottomNavigationBarType.fixed,
-          selectedItemColor: AppColors.primary,
-          unselectedItemColor: Colors.grey,
-          currentIndex: _selectedIndex,
-          onTap: _onItemTapped,
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home_filled),
-              label: 'Início',
-            ),
-            BottomNavigationBarItem(icon: Icon(Icons.school), label: 'Cursos'),
-            BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
-          ],
+    return PopScope(
+      // Em apps tradicionais, o botão voltar só fecha o app na rota/aba inicial.
+      // Como as abas são trocadas dentro da mesma rota, precisamos interceptar.
+      canPop: _selectedIndex == 0,
+      onPopInvoked: (didPop) {
+        if (didPop) return;
+        if (_selectedIndex != 0) {
+          setState(() {
+            _selectedIndex = 0;
+          });
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: screens[_selectedIndex],
+        bottomNavigationBar: Container(
+          decoration: const BoxDecoration(
+            border: Border(top: BorderSide(color: Colors.white10, width: 1)),
+          ),
+          child: BottomNavigationBar(
+            backgroundColor: AppColors.background,
+            elevation: 0,
+            type: BottomNavigationBarType.fixed,
+            selectedItemColor: AppColors.primary,
+            unselectedItemColor: Colors.grey,
+            currentIndex: _selectedIndex,
+            onTap: _onItemTapped,
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.home_filled),
+                label: 'Início',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.school),
+                label: 'Cursos',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.person),
+                label: 'Perfil',
+              ),
+            ],
+          ),
         ),
       ),
     );
