@@ -1,6 +1,7 @@
 import 'dart:io'; // <--- OBRIGATÓRIO: Para usar File()
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:tutorial_coach_mark/tutorial_coach_mark.dart'; // Import do Tutorial
 import '../../core/theme/app_colors.dart';
 import '../../core/constants/text_formatters.dart';
 import '../../models/user_model.dart';
@@ -21,11 +22,196 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late int _selectedIndex;
+  final ScrollController _scrollController = ScrollController();
+  int _currentTargetIndex = 0;
+
+  // Keys para o Tutorial
+  final GlobalKey _headerKey = GlobalKey();
+  final GlobalKey _summaryKey = GlobalKey();
+  final GlobalKey _periodsKey = GlobalKey();
+  final GlobalKey _settingsKey = GlobalKey();
+
+  TutorialCoachMark? tutorial; // Variável do Tutorial
+  List<TargetFocus> targets = [];
 
   @override
   void initState() {
     super.initState();
     _selectedIndex = widget.initialIndex;
+
+    // Agenda a verificação do tutorial logo após o build da tela
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndShowTutorial();
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _checkAndShowTutorial() {
+    var settingsBox = Hive.box('settings');
+    // Verifica se o tutorial já foi mostrado (padrão false)
+    bool tutorialShown = settingsBox.get('tutorial_shown', defaultValue: false);
+
+    if (!tutorialShown) {
+      // Delay maior para garantir que o layout (inclusive via Hive) esteja estável
+      Future.delayed(const Duration(milliseconds: 1000), () {
+        if (mounted) {
+          _initTargets();
+          _showTutorial();
+        }
+      });
+    }
+  }
+
+  void _showTutorial() {
+    _currentTargetIndex = 0;
+    tutorial = TutorialCoachMark(
+      targets: targets,
+      colorShadow: AppColors.background,
+      hideSkip: true,
+      paddingFocus: 0, // Removendo padding extra global
+      opacityShadow: 0.8,
+      onFinish: () {
+        Hive.box('settings').put('tutorial_shown', true);
+      },
+      onClickTarget: (target) {
+        _handleNextTarget();
+      },
+      onClickOverlay: (target) {
+        _handleNextTarget();
+      },
+      onSkip: () {
+        Hive.box('settings').put('tutorial_shown', true);
+        return true;
+      },
+    );
+    
+    tutorial?.show(context: context);
+  }
+
+  Future<void> _handleNextTarget() async {
+    final nextIndex = _currentTargetIndex + 1;
+    if (nextIndex < targets.length) {
+      final nextKey = _getTargetKey(nextIndex);
+      if (nextKey?.currentContext != null) {
+        await Scrollable.ensureVisible(
+          nextKey!.currentContext!,
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeInOut,
+          alignment: 0.1,
+        );
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+    }
+
+    _currentTargetIndex = nextIndex;
+    tutorial?.next();
+  }
+
+  GlobalKey? _getTargetKey(int index) {
+    if (index < 0 || index >= 4) return null;
+    return <GlobalKey>[_headerKey, _summaryKey, _periodsKey, _settingsKey][index];
+  }
+
+  void _initTargets() {
+    targets = [
+      _createTarget(
+        identify: "header",
+        keyTarget: _headerKey,
+        title: "Bem-vindo!",
+        description: "Aqui você vê seu perfil e notificações importantes.",
+        align: ContentAlign.bottom,
+      ),
+      _createTarget(
+        identify: "summary",
+        keyTarget: _summaryKey,
+        title: "Resumo Acadêmico",
+        description: "Acompanhe sua média geral e o progresso do semestre atual em tempo real.",
+        align: ContentAlign.bottom,
+      ),
+      _createTarget(
+        identify: "periods",
+        keyTarget: _periodsKey,
+        title: "Gerencie seus Períodos",
+        description: "Toque aqui para adicionar semestres, disciplinas e registrar suas notas.",
+        align: ContentAlign.top,
+      ),
+      _createTarget(
+        identify: "settings",
+        keyTarget: _settingsKey,
+        title: "Ajustes", // Renomeado de Configurações para Ajustes
+        description: "Personalize sua experiência e ajustes do aplicativo.",
+        align: ContentAlign.top,
+      ),
+    ];
+  }
+
+  TargetFocus _createTarget({
+    required String identify,
+    required GlobalKey keyTarget,
+    required String title,
+    required String description,
+    required ContentAlign align,
+    double radius = 16, // Raio padrão para combinar com os cards
+  }) {
+    return TargetFocus(
+      identify: identify,
+      keyTarget: keyTarget,
+      alignSkip: Alignment.topRight,
+      radius: radius,
+      shape: ShapeLightFocus.RRect,
+      paddingFocus: 5, // Padding ajustado localmente
+      contents: [
+        TargetContent(
+          align: align,
+          builder: (context, controller) {
+             return GestureDetector(
+              onTap: () => tutorial?.next(),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: const [
+                     BoxShadow(
+                      color: Colors.black45,
+                      blurRadius: 10,
+                      offset: Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                     Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primary,
+                        fontSize: 18,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      description,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ],
+    );
   }
 
   void _onItemTapped(int index) {
@@ -102,13 +288,19 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildDashboard() {
     return SafeArea(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        controller: _scrollController,
+        padding: const EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 20,
+          bottom: 100, // Extra padding para garantir scroll até o final no tutorial
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildHeader(), // <--- Aqui está a mágica da foto
+            Container(key: _headerKey, child: _buildHeader()),
             const SizedBox(height: 24),
-            _buildSummaryCards(),
+            Container(key: _summaryKey, child: _buildSummaryCards()),
             const SizedBox(height: 32),
             const Text(
               "Acesso Rápido",
@@ -120,6 +312,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 16),
             _buildQuickAccessItem(
+              key: _periodsKey,
               icon: Icons.calendar_month,
               title: "Períodos",
               subtitle: "Histórico de notas",
@@ -127,6 +320,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 12),
             _buildQuickAccessItem(
+              key: _settingsKey,
               icon: Icons.settings,
               title: "Ajustes",
               subtitle: "Preferências",
@@ -417,12 +611,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildQuickAccessItem({
+    Key? key,
     required IconData icon,
     required String title,
     required String subtitle,
     required VoidCallback onTap,
   }) {
     return Container(
+      key: key,
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
