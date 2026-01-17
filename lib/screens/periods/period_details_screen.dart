@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart'; // <--- Importante para ouvir o banco
+import 'package:tutorial_coach_mark/tutorial_coach_mark.dart'; // Import Tutorial
 import '../../core/constants/text_formatters.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/period_model.dart';
@@ -21,10 +22,112 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
   // Variável local para manter o período atualizado caso seja editado
   late PeriodModel _period;
 
+  // KEY DO TUTORIAL
+  final GlobalKey _addSubjectKey = GlobalKey();
+  
+  TutorialCoachMark? tutorial; // Variável do Tutorial
+
   @override
   void initState() {
     super.initState();
     _period = widget.period;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndShowTutorial();
+    });
+  }
+
+  void _checkAndShowTutorial() {
+    var settingsBox = Hive.box('settings');
+    bool tutorialDetailsShown = settingsBox.get('tutorial_details_shown', defaultValue: false);
+    bool periodsTutorialShown = settingsBox.get('tutorial_periods_shown', defaultValue: false);
+
+    // Segue a sequência: Home -> Periods -> Details
+    if (periodsTutorialShown && !tutorialDetailsShown) {
+      // Delay para garantir que o botão flutuante renderizou
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if(mounted) _createAndShowTutorial();
+      });
+    }
+  }
+
+  void _createAndShowTutorial() {
+    List<TargetFocus> targets = [
+      TargetFocus(
+        identify: "add_subject_btn",
+        keyTarget: _addSubjectKey,
+        alignSkip: Alignment.topRight,
+        contents: [
+          TargetContent(
+            align: ContentAlign.top,
+            builder: (context, controller) {
+              return GestureDetector(
+                onTap: () => tutorial?.next(),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: const [
+                       BoxShadow(
+                        color: Colors.black45,
+                        blurRadius: 10,
+                        offset: Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                       Text(
+                        "Nova Disciplina",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                          fontSize: 18,
+                        ),
+                      ),
+                       SizedBox(height: 8),
+                      Text(
+                        "Toque aqui para cadastrar suas matérias e começar a lançar notas.",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    ];
+
+    tutorial = TutorialCoachMark(
+      targets: targets,
+      colorShadow: AppColors.background,
+      hideSkip: true,
+      paddingFocus: 10,
+      opacityShadow: 0.8,
+      onFinish: () {
+        Hive.box('settings').put('tutorial_details_shown', true);
+      },
+      onClickTarget: (target) {
+        tutorial?.next();
+      },
+      onClickOverlay: (target) {
+        tutorial?.next();
+      },
+      onSkip: () {
+        Hive.box('settings').put('tutorial_details_shown', true);
+        return true;
+      },
+    );
+    
+    tutorial?.show(context: context);
   }
 
   // --- Lógica para excluir o período ---
@@ -247,6 +350,7 @@ class _PeriodDetailsScreenState extends State<PeriodDetailsScreen> {
               width: double.infinity,
               height: 56,
               child: ElevatedButton.icon(
+                key: _addSubjectKey,
                 onPressed: () {
                   Navigator.push(
                     context,
